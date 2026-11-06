@@ -2,6 +2,7 @@
 #include "../Source/VerbControls.h"
 #include "../Source/kRockstar2Engine.h"
 #include "../Source/kRockstarEngine.h"
+#include "../Source/kCyberCityEngine.h"
 
 #include "../Source/OutputMeter.h"
 #include "../Source/MeterBallistics.h"
@@ -101,7 +102,7 @@ void trimChecks() {
         // A known output trim must be applied exactly once after the original reverb.
         out.setValueNotifyingHost(out.convertTo0to1(-6));
         p->setProcessingPrecision(juce::AudioProcessor::doublePrecision); p->prepareToPlay(48000,256);
-        kRockstar2Engine pear; kRockstarEngine bez;
+        kRockstar2Engine pear; kRockstarEngine bez; kCyberCityEngine cyber; cyber.reset(48000);
         pear.reset(48000); bez.reset(48000);
         juce::AudioBuffer<double> audio(2,256),expected(2,256); juce::MidiBuffer midi;
         for(int i=0;i<256;++i) for(int c=0;c<2;++c) audio.setSample(c,i,.1*std::sin(i*.05*(c+1)));
@@ -109,6 +110,7 @@ void trimChecks() {
         switch(model) {
             case 0: pear.processDoubleReplacing(ptr,ptr,256); break;
             case 1: bez.processDoubleReplacing(ptr,ptr,256); break;
+            case 2: cyber.processDoubleReplacing(ptr,ptr,256); break;
         }
         p->processBlock(audio,midi);
         for(int c=0;c<2;++c) for(int i=0;i<256;++i) require(std::abs(audio.getSample(c,i)-expected.getSample(c,i)*std::pow(10.,-6./20.))<1.e-12,"Output trim applied incorrectly");
@@ -147,7 +149,15 @@ int main() try {
     juce::ScopedJuceInitialiser_GUI init;
     std::unique_ptr<juce::AudioProcessor> p(createPluginFilter());
     require(parameter(*p,"model").getValue()==0,"kRockstar2 is not the default");
-    require(p->getParameters().size()==20,"Unexpected parameter layout");
+    require(p->getParameters().size()==28,"Unexpected parameter layout");
+    juce::StringArray originalIds;
+    for(int model:{0,1}) for(int i=0;i<controls::count(model);++i) originalIds.add(controls::id(model,i));
+    originalIds.add("model");
+    for(int model:{0,1}) originalIds.add(controls::linkId(model));
+    for(int model:{0,1}) { originalIds.add(controls::matchId(model)); originalIds.add(controls::originalId(model)); }
+    for(int model:{0,1}) { originalIds.add(controls::inputId(model)); originalIds.add(controls::outputId(model)); }
+    require(originalIds.size()==20,"Old layout fixture incomplete");
+    for(int i=0;i<originalIds.size();++i) require(dynamic_cast<juce::RangedAudioParameter*>(p->getParameters()[i])->paramID==originalIds[i],"Existing parameter index changed");
     // All native defaults and the public parameter layout are explicit.
     require(p->getName()=="AirVerb Studio","Wrong plugin identity");
     require(p->getTailLengthSeconds()>=30.,"Reverb tail not reported to the host");
@@ -158,11 +168,12 @@ int main() try {
         for(int model=0;model<controls::modelCount;++model) { bypassChecks<float>(*p,model,rate); bypassChecks<double>(*p,model,rate); }
         compare<kRockstar2Engine,float>(*p,0,rate); compare<kRockstar2Engine,double>(*p,0,rate);
         compare<kRockstarEngine,float>(*p,1,rate); compare<kRockstarEngine,double>(*p,1,rate);
+        compare<kCyberCityEngine,float>(*p,2,rate); compare<kCyberCityEngine,double>(*p,2,rate);
 
     }
     meterChecks(); trimChecks();
     UI ui(*p);
-    for(int model:{0,1,0}) {
+    for(int model:{0,1,2,0}) {
         ui.selectModel(model);
         require(close(parameter(*p,"model").convertFrom0to1(parameter(*p,"model").getValue()),model),"Selector not bound");
         int visible=0;

@@ -3,6 +3,7 @@
 #include <limits>
 #include "kRockstar2Engine.h"
 #include "kRockstarEngine.h"
+#include "kCyberCityEngine.h"
 
 #include "VerbControls.h"
 
@@ -62,11 +63,12 @@ public:
         for(int model:{0,1}) addLink(model);
         for(int model:{0,1}) addComparison(model);
         for(int model:{0,1}) addTrims(model);
+        for(int model=2;model<controls::modelCount;++model) { addBank(model); addLink(model); addComparison(model); addTrims(model); }
         return p;
     }
     int selectedModel() const { return juce::jlimit(0,controls::modelCount-1,juce::roundToInt(modelValue->load())); }
     void prepareToPlay(double rate,int maximumBlockSize) override {
-        sampleRate=rate; engine.reset(rate); engine1.reset(rate);
+        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate);
         dryHistory={};
         activeModel=selectedModel(); setLatencySamples(controls::latency(activeModel)); peaks[0]=0; peaks[1]=0;
         meterTimeoutSeconds.store(juce::jmax(.15,2.0*maximumBlockSize/rate),std::memory_order_relaxed);
@@ -136,6 +138,7 @@ public:
         switch(model) {
             case 0: render(engine,b,model); break;
             case 1: render(engine1,b,model); break;
+            case 2: render(engine2,b,model); break;
             default: break;
         }
         publishMeters(b);
@@ -249,6 +252,7 @@ private:
             switch(model) {
                 case 0: engine.reset(sampleRate); break;
                 case 1: engine1.reset(sampleRate); break;
+                case 2: engine2.reset(sampleRate); break;
                 default: break;
             }
             setLatencySamples(controls::latency(model));
@@ -293,6 +297,7 @@ private:
     uint32_t notifiedRevision=0;
     kRockstar2Engine engine;
     kRockstarEngine engine1;
+    kCyberCityEngine engine2;
     // [0] is the previous input sample; [1] is two samples back.
     std::array<std::array<double,2>,2> dryHistory{};
     std::array<double,2> alignedDry(double left,double right,int delay) {
