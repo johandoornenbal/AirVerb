@@ -3,6 +3,11 @@
 #include "../Source/kRockstar2Engine.h"
 #include "../Source/kRockstarEngine.h"
 #include "../Source/kCyberCityEngine.h"
+#include "../Source/VerbThicEngine.h"
+#include "../Source/kWoodRoomEngine.h"
+#include "../Source/MV2Engine.h"
+#include "../Source/VerbSevensEngine.h"
+#include "../Source/kStationEngine.h"
 
 #include "../Source/LoudnessMatch.h"
 #include <iostream>
@@ -47,7 +52,7 @@ template<class Engine> void learn(juce::AudioProcessor& p,UI& ui,int model) {
     param(p,controls::originalId(model)).setValueNotifyingHost(0);
     p.setProcessingPrecision(juce::AudioProcessor::doublePrecision);
     p.setRateAndBufferSizeDetails(48000,256); p.prepareToPlay(48000,256);
-    Engine reference; reference.reset(48000);
+    auto referenceInstance=std::make_unique<Engine>(); auto& reference=*referenceInstance; reference.reset(48000);
     for(int i=0;i<controls::count(model);++i) reference.setParameter(i,param(p,controls::id(model,i)).getValue());
     LoudnessMatch expected; expected.prepare(48000); expected.start();
     juce::AudioBuffer<double> b(2,256),wet(2,256); juce::MidiBuffer midi;
@@ -93,7 +98,7 @@ template<class Engine> void learn(juce::AudioProcessor& p,UI& ui,int model) {
 }
 template<class Engine> void verifyAppliedAfterSwitch(juce::AudioProcessor& p,int model) {
     param(p,"model").setValueNotifyingHost(param(p,"model").convertTo0to1(static_cast<float>(model)));
-    Engine reference; reference.reset(48000);
+    auto referenceInstance=std::make_unique<Engine>(); auto& reference=*referenceInstance; reference.reset(48000);
     for(int i=0;i<controls::count(model);++i) reference.setParameter(i,param(p,controls::id(model,i)).getValue());
     juce::AudioBuffer<double> b(2,256),wet(2,256); juce::MidiBuffer midi;
     const auto saved=snapshot(p);
@@ -139,6 +144,11 @@ int main() try {
     auto& in=param(*p,controls::inputId(0)); auto& out=param(*p,controls::outputId(0));
     in.setValueNotifyingHost(in.convertTo0to1(3)); out.setValueNotifyingHost(out.convertTo0to1(-2));
     learn<kRockstar2Engine>(*p,ui,0); learn<kRockstarEngine>(*p,ui,1); learn<kCyberCityEngine>(*p,ui,2);
+    learn<VerbThicEngine>(*p,ui,3);
+    learn<kWoodRoomEngine>(*p,ui,4);
+    learn<MV2Engine>(*p,ui,5);
+    learn<VerbSevensEngine>(*p,ui,6);
+    learn<kStationEngine>(*p,ui,7);
     in.setValueNotifyingHost(in.getDefaultValue()); out.setValueNotifyingHost(out.getDefaultValue());
     const auto learned=snapshot(*p);
     const double db0=learned.getProperty(key(0,"matchDb")),db1=learned.getProperty(key(1,"matchDb"));
@@ -153,6 +163,11 @@ int main() try {
     param(*p,controls::matchId(1)).setValueNotifyingHost(0);
     ui.select(0); p->prepareToPlay(48000,256);
     verifyAppliedAfterSwitch<kRockstarEngine>(*p,1); verifyAppliedAfterSwitch<kRockstar2Engine>(*p,0); verifyAppliedAfterSwitch<kCyberCityEngine>(*p,2);
+    verifyAppliedAfterSwitch<VerbThicEngine>(*p,3);
+    verifyAppliedAfterSwitch<kWoodRoomEngine>(*p,4);
+    verifyAppliedAfterSwitch<MV2Engine>(*p,5);
+    verifyAppliedAfterSwitch<VerbSevensEngine>(*p,6);
+    verifyAppliedAfterSwitch<kStationEngine>(*p,7);
 
     p->releaseResources();
     for(int model=0;model<controls::modelCount;++model) { original<float>(*p,model); original<double>(*p,model); }
@@ -160,7 +175,7 @@ int main() try {
         param(*p,controls::originalId(model)).setValueNotifyingHost(model%2?1.f:0.f);
         param(*p,controls::matchId(model)).setValueNotifyingHost(model%2?0.f:1.f);
     }
-    for(int model:{0,1,2,0,1}) {
+    for(int model:{0,1,2,3,4,5,6,7,0,1}) {
         ui.select(model);
         check(dynamic_cast<juce::TextButton&>(ui.component("matchEnabled")).getToggleState()==(model%2==0),"Model match enable not recalled");
         check(dynamic_cast<juce::TextButton&>(ui.component("abOriginal")).getToggleState()==(model%2==1),"Model A/B not recalled");
@@ -175,8 +190,26 @@ int main() try {
         check(param(*restored,controls::originalId(model)).getValue()==param(*p,controls::originalId(model)).getValue(),"Session lost A/B");
         check(param(*restored,controls::matchId(model)).getValue()==param(*p,controls::matchId(model)).getValue(),"Session lost match enable");
     }
+    // Sessions from the three-model release preserve old banks and initialize all new banks.
+    auto three=learned.createCopy();
+    for(int i=three.getNumChildren();--i>=0;) {
+        const auto id=three.getChild(i).getProperty("id").toString();
+        for(int model=3;model<controls::modelCount;++model) if(id.startsWith(controls::prefix(model))) { three.removeChild(i,nullptr); break; }
+    }
+    for(int model=3;model<controls::modelCount;++model) for(const char* property:{"matchDb","hasMatch","inputLufs","outputLufs"}) three.removeProperty(key(model,property),nullptr);
+    three.getChildWithProperty("id","model").setProperty("value",2,nullptr);
+    restore(*restored,three);
+    check(std::abs(param(*restored,"model").convertFrom0to1(param(*restored,"model").getValue())-2.f)<1.e-6,"Three-model session lost selection");
+    for(int model=0;model<3;++model) {
+        for(int i=0;i<controls::count(model);++i) check(param(*restored,controls::id(model,i)).getValue()==param(*p,controls::id(model,i)).getValue(),"Three-model session lost controls");
+        check(snapshot(*restored).getProperty(key(model,"matchDb"))==learned.getProperty(key(model,"matchDb")),"Three-model session lost match");
+    }
+    for(int model=3;model<controls::modelCount;++model) {
+        for(int i=0;i<controls::count(model);++i) check(std::abs(param(*restored,controls::id(model,i)).getValue()-controls::defaultValue(model,i))<1.e-6,"New bank lost native defaults");
+        check(!static_cast<bool>(snapshot(*restored).getProperty(key(model,"hasMatch"))),"Old session invented a learned match");
+    }
     // Sessions from the two-model release retain their controls and learned matches.
-    auto old=learned.createCopy();
+    auto old=three.createCopy();
     for(int i=old.getNumChildren();--i>=0;)
         if(old.getChild(i).getProperty("id").toString().startsWith("kcyber_")) old.removeChild(i,nullptr);
     for(const char* property:{"matchDb","hasMatch","inputLufs","outputLufs"}) old.removeProperty(key(2,property),nullptr);

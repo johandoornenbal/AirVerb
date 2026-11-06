@@ -4,6 +4,11 @@
 #include "kRockstar2Engine.h"
 #include "kRockstarEngine.h"
 #include "kCyberCityEngine.h"
+#include "VerbThicEngine.h"
+#include "kWoodRoomEngine.h"
+#include "MV2Engine.h"
+#include "VerbSevensEngine.h"
+#include "kStationEngine.h"
 
 #include "VerbControls.h"
 
@@ -68,7 +73,7 @@ public:
     }
     int selectedModel() const { return juce::jlimit(0,controls::modelCount-1,juce::roundToInt(modelValue->load())); }
     void prepareToPlay(double rate,int maximumBlockSize) override {
-        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate);
+        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate);
         dryHistory={};
         activeModel=selectedModel(); setLatencySamples(controls::latency(activeModel)); peaks[0]=0; peaks[1]=0;
         meterTimeoutSeconds.store(juce::jmax(.15,2.0*maximumBlockSize/rate),std::memory_order_relaxed);
@@ -139,6 +144,11 @@ public:
             case 0: render(engine,b,model); break;
             case 1: render(engine1,b,model); break;
             case 2: render(engine2,b,model); break;
+            case 3: render(engine3,b,model); break;
+            case 4: render(engine4,b,model); break;
+            case 5: render(engine5,b,model); break;
+            case 6: render(engine6,b,model); break;
+            case 7: render(engine7,b,model); break;
             default: break;
         }
         publishMeters(b);
@@ -253,6 +263,11 @@ private:
                 case 0: engine.reset(sampleRate); break;
                 case 1: engine1.reset(sampleRate); break;
                 case 2: engine2.reset(sampleRate); break;
+                case 3: engine3.reset(sampleRate); break;
+                case 4: engine4.reset(sampleRate); break;
+                case 5: engine5.reset(sampleRate); break;
+                case 6: engine6.reset(sampleRate); break;
+                case 7: engine7.reset(sampleRate); break;
                 default: break;
             }
             setLatencySamples(controls::latency(model));
@@ -298,6 +313,11 @@ private:
     kRockstar2Engine engine;
     kRockstarEngine engine1;
     kCyberCityEngine engine2;
+    VerbThicEngine engine3;
+    kWoodRoomEngine engine4;
+    MV2Engine engine5;
+    VerbSevensEngine engine6;
+    kStationEngine engine7;
     // [0] is the previous input sample; [1] is two samples back.
     std::array<std::array<double,2>,2> dryHistory{};
     std::array<double,2> alignedDry(double left,double right,int delay) {
@@ -496,6 +516,10 @@ public:
         const auto start=(980-(columns-1)*spacing-width)/2;
         g.setColour(gold); g.setFont(juce::FontOptions(11.f));
         for(int j=0;j<columns;++j) g.drawText(juce::String(controls::name(shownModel,controls::primaryIndex(shownModel,j))).toUpperCase(),start+j*spacing,367,width,22,juce::Justification::centred);
+        if(controls::count(shownModel)==0) {
+            g.setColour(cream.withAlpha(.75f)); g.setFont(juce::FontOptions(15.f));
+            g.drawText("This algorithm has no native parameters.",120,423,740,32,juce::Justification::centred);
+        }
         g.setColour(cream.withAlpha(.1f)); g.drawHorizontalLine(555,138,842);
         g.setColour(gold); g.setFont(juce::FontOptions(16.f));
         g.drawText(controls::description(shownModel),100,580,780,28,juce::Justification::centred);

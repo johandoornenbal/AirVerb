@@ -5,14 +5,18 @@
 Source: https://github.com/airwindows/airwindows
 Commit: `7fd5f5cae262a41e6dd7d9a83d60c46e84d3092a` (retrieved 2026-11-06).
 The original `plugins/WinVST/kRockstar2`, `plugins/WinVST/kRockstar` and
-`plugins/WinVST/kCyberCity` headers,
+`plugins/WinVST/kCyberCity`, `VerbThic`, `kWoodRoom`, `MV2`, `VerbSevens` and
+`kStation` headers (all under `plugins/WinVST/`),
 wrappers and processing sources are retained byte-for-byte under
 `third_party/airwindows/`, together with the upstream MIT license.
 Copyright Chris Johnson / Airwindows.
 
 `Source/*Engine.*` replaces VST2 metadata and state management with standalone
 engines. Float/double processing bodies are unchanged apart from method signatures.
-Delay constants are scoped to their engine class, initialization is exposed as
+Delay constants are scoped to their engine class. Conditional storage declarations
+are resolved using each original header's active feature flags; the processing and
+reset bodies keep those same flags isolated in their own translation unit.
+Initialization is exposed as
 `reset(sampleRate)`, and setters clamp normalized parameters to 0–1. Native defaults
 are unchanged. Noise seeds are fixed at `0x12345678` / `0x87654321` for deterministic
 tests; this changes noise/dither sequences relative to randomly seeded instances.
