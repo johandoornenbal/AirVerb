@@ -1,20 +1,23 @@
 # AirVerb Studio
 
 A studio interface for **Airwindows kRockstar2 (default), kRockstar, kCyberCity,
-VerbThic, kWoodRoom, MV2, VerbSevens and kStation**, following
+VerbThic, kWoodRoom, MV2, VerbSevens, kStation, kGuitarHall2, kCathedral5,
+kBeyond, kPlate140 and kPlate240**, following
 [AirEq](https://github.com/johandoornenbal/AirEq) and
 [AirComp](https://github.com/johandoornenbal/AirComp): cream, charcoal and brass,
 analogue output meters, linked trims and learned LUFS compensation.
 
 Native **VST3 for Apple Silicon Macs, M2 and later**, macOS 11+. Original DSP by
-Chris Johnson / Airwindows. All eight native algorithms retain their audio calculations,
+Chris Johnson / Airwindows. All thirteen native algorithms retain their audio calculations,
 including the reverb feedback, room tone, downsampling, distance and dry/wet mixing.
 
 ![kRockstar2 editor](docs/ui-krockstar2.png)
 
 [kRockstar editor](docs/ui-krockstar.png) · [kCyberCity editor](docs/ui-kcybercity.png) ·
 [VerbThic](docs/ui-verbthic.png) · [kWoodRoom](docs/ui-kwoodroom.png) ·
-[MV2](docs/ui-mv2.png) · [VerbSevens](docs/ui-verbsevens.png) · [kStation](docs/ui-kstation.png)
+[MV2](docs/ui-mv2.png) · [VerbSevens](docs/ui-verbsevens.png) · [kStation](docs/ui-kstation.png) ·
+[kGuitarHall2](docs/ui-kguitarhall2.png) · [kCathedral5](docs/ui-kcathedral5.png) ·
+[kBeyond](docs/ui-kbeyond.png) · [kPlate140](docs/ui-kplate140.png) · [kPlate240](docs/ui-kplate240.png)
 
 ## Controls
 
@@ -28,12 +31,22 @@ including the reverb feedback, room tone, downsampling, distance and dry/wet mix
 | MV2 | Depth, Bright, Regen, Output, Dry/Wet | 50%, 50%, 50%, 100%, 100% |
 | VerbSevens | No native parameters | Original fixed reverb |
 | kStation | Regen, Derez, Filter, Early RF, Position, Dry/Wet | 50%, 50%, 50%, 50%, 90%, 50% |
+| kGuitarHall2 | Regen, Derez, Filter, Early RF, Position, Dry/Wet | All 50% |
+| kCathedral5 | Regen, Derez, Filter, Early RF, Position, Dry/Wet | Filter 24%; others 50% |
+| kBeyond | Regen, Derez, Filter, Early RF, Pre-delay, Dry/Wet | 50%, 100%, 50%, 50%, 0%, 50% |
+| kPlate140 | Input, Regen, DeRez, Pre-delay, Wetness | 100%, 50%, 100%, 0%, 25% |
+| kPlate240 | Input, Regen, DeRez, Pre-delay, Wetness | 100%, 50%, 100%, 0%, 25% |
 
 VerbSevens has no native parameters; its interface keeps the original fixed
 processing and offers only wrapper trims, LUFS matching and A/B. MV2 Output is
 its original gain, independent of the wrapper Output trim.
 
-Position, Distance and Early RF expand the original abbreviated labels. All native
+The plates retain their original Input pad and Wetness law. Native Input is
+independent of wrapper Input trim. Wetness at 0% is dry, 50% is full dry plus
+full wet, and 100% is wet only; its default is 25%. Pre-delay remains normalized,
+not a millisecond readout.
+
+Position, Distance, Pre-delay and Early RF expand the original abbreviated labels. All native
 parameters retain their 0–1 mappings, displayed as percentages. Regen is not a
 seconds readout and DownRez is not a Hz readout. Double-click a knob to reset it,
 or type a percentage below it. Dry/Wet at 100% suits a send/return effect.
@@ -90,9 +103,10 @@ when exporting offline. Delay-buffer history is not serialized in sessions.
 
 ## Existing sessions
 
-The original 28 parameter IDs and indices are unchanged. Two- and three-model
-sessions retain their controls and learned matches; missing banks start at their
-native defaults with no learned match. The model selector now has eight choices, so automation of
+All 75 parameter IDs and indices from the eight-model release are unchanged.
+Two-, three- and eight-model sessions retain their controls and learned matches;
+missing banks start at native defaults with no learned match. The model selector
+now has thirteen choices, so automation of
 that selector may need updating for the expanded range.
 
 ## One-command Mac build and install
@@ -144,7 +158,7 @@ configure with `-DJUCE_PATH=/workspace/deps/JUCE`. `scripts/setup-cloud.sh` sets
 the rootless Debian tools and development dependencies if needed. Linux builds
 are for development; release support targets Apple Silicon Macs.
 
-The eight native reference suites compare float/double output exactly against the
+The thirteen native reference suites compare float/double output exactly against the
 untouched upstream VST2 sources with matched seeds: 96 scenarios per algorithm,
 44.1–192 kHz, silence, parameter extremes and automation, variable blocks,
 reverb tails and reset. Loudness tests compare with independent libebur128.
@@ -153,9 +167,9 @@ all three editor sizes, typed/reset controls and session recall. LUFS integratio
 checks cover learning, fixed compensation placement, relearning, per-model isolation,
 Original A/B, reset, cancellation, silent input and automatic completion.
 
-Linux Release VST3 compilation and all eleven test suites passed in this development
-instance, including 768 exact upstream comparisons (maximum absolute error 0).
-All eight editors rendered at all three sizes. The installer passed shell syntax and
+Linux Release VST3 compilation and all sixteen test suites passed in this development
+instance, including 1,248 exact upstream comparisons (maximum absolute error 0).
+All thirteen editors rendered at all three sizes. The installer passed shell syntax and
 simulated success, signing failure and replacement-failure rollback checks.
 
 ## Licensing

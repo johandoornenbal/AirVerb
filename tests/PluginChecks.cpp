@@ -8,6 +8,11 @@
 #include "../Source/MV2Engine.h"
 #include "../Source/VerbSevensEngine.h"
 #include "../Source/kStationEngine.h"
+#include "../Source/kGuitarHall2Engine.h"
+#include "../Source/kCathedral5Engine.h"
+#include "../Source/kBeyondEngine.h"
+#include "../Source/kPlate140Engine.h"
+#include "../Source/kPlate240Engine.h"
 
 #include "../Source/OutputMeter.h"
 #include "../Source/MeterBallistics.h"
@@ -123,6 +128,11 @@ void trimChecks() {
             case 5: defaultOutput<MV2Engine>(ptr); break;
             case 6: defaultOutput<VerbSevensEngine>(ptr); break;
             case 7: defaultOutput<kStationEngine>(ptr); break;
+            case 8: defaultOutput<kGuitarHall2Engine>(ptr); break;
+            case 9: defaultOutput<kCathedral5Engine>(ptr); break;
+            case 10: defaultOutput<kBeyondEngine>(ptr); break;
+            case 11: defaultOutput<kPlate140Engine>(ptr); break;
+            case 12: defaultOutput<kPlate240Engine>(ptr); break;
         }
         p->processBlock(audio,midi);
         for(int c=0;c<2;++c) for(int i=0;i<256;++i) require(std::abs(audio.getSample(c,i)-expected.getSample(c,i)*std::pow(10.,-6./20.))<1.e-12,"Output trim applied incorrectly");
@@ -161,7 +171,7 @@ int main() try {
     juce::ScopedJuceInitialiser_GUI init;
     std::unique_ptr<juce::AudioProcessor> p(createPluginFilter());
     require(parameter(*p,"model").getValue()==0,"kRockstar2 is not the default");
-    require(p->getParameters().size()==75,"Unexpected parameter layout");
+    require(p->getParameters().size()==128,"Unexpected parameter layout");
     juce::StringArray originalIds;
     for(int model:{0,1}) for(int i=0;i<controls::count(model);++i) originalIds.add(controls::id(model,i));
     originalIds.add("model");
@@ -171,7 +181,12 @@ int main() try {
     for(int i=0;i<controls::count(2);++i) originalIds.add(controls::id(2,i));
     originalIds.add(controls::linkId(2)); originalIds.add(controls::matchId(2)); originalIds.add(controls::originalId(2));
     originalIds.add(controls::inputId(2)); originalIds.add(controls::outputId(2));
-    require(originalIds.size()==28,"Old layout fixture incomplete");
+    for(int model=3;model<8;++model) {
+        for(int i=0;i<controls::count(model);++i) originalIds.add(controls::id(model,i));
+        originalIds.add(controls::linkId(model)); originalIds.add(controls::matchId(model)); originalIds.add(controls::originalId(model));
+        originalIds.add(controls::inputId(model)); originalIds.add(controls::outputId(model));
+    }
+    require(originalIds.size()==75,"Old layout fixture incomplete");
     for(int i=0;i<originalIds.size();++i) require(dynamic_cast<juce::RangedAudioParameter*>(p->getParameters()[i])->paramID==originalIds[i],"Existing parameter index changed");
     // All native defaults and the public parameter layout are explicit.
     require(p->getName()=="AirVerb Studio","Wrong plugin identity");
@@ -189,11 +204,16 @@ int main() try {
         compare<MV2Engine,float>(*p,5,rate); compare<MV2Engine,double>(*p,5,rate);
         compare<VerbSevensEngine,float>(*p,6,rate); compare<VerbSevensEngine,double>(*p,6,rate);
         compare<kStationEngine,float>(*p,7,rate); compare<kStationEngine,double>(*p,7,rate);
+        compare<kGuitarHall2Engine,float>(*p,8,rate); compare<kGuitarHall2Engine,double>(*p,8,rate);
+        compare<kCathedral5Engine,float>(*p,9,rate); compare<kCathedral5Engine,double>(*p,9,rate);
+        compare<kBeyondEngine,float>(*p,10,rate); compare<kBeyondEngine,double>(*p,10,rate);
+        compare<kPlate140Engine,float>(*p,11,rate); compare<kPlate140Engine,double>(*p,11,rate);
+        compare<kPlate240Engine,float>(*p,12,rate); compare<kPlate240Engine,double>(*p,12,rate);
 
     }
     meterChecks(); trimChecks();
     UI ui(*p);
-    for(int model:{0,1,2,3,4,5,6,7,0}) {
+    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,0}) {
         ui.selectModel(model);
         require(close(parameter(*p,"model").convertFrom0to1(parameter(*p,"model").getValue()),model),"Selector not bound");
         int visible=0;

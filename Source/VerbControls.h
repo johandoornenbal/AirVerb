@@ -1,12 +1,12 @@
 #pragma once
 #include <array>
 namespace controls {
-constexpr int modelCount=8;
+constexpr int modelCount=13;
 constexpr int maxParameters=6;
-constexpr std::array<const char*,modelCount> models{"kRockstar2","kRockstar","kCyberCity","VerbThic","kWoodRoom","MV2","VerbSevens","kStation"};
+constexpr std::array<const char*,modelCount> models{"kRockstar2","kRockstar","kCyberCity","VerbThic","kWoodRoom","MV2","VerbSevens","kStation","kGuitarHall2","kCathedral5","kBeyond","kPlate140","kPlate240"};
 inline juce::String modelName(int model) { return models[static_cast<size_t>(model)]; }
-inline int count(int model) { constexpr std::array<int,modelCount> counts{5,4,3,5,6,5,0,6}; return counts[static_cast<size_t>(model)]; }
-inline juce::String prefix(int model) { constexpr std::array<const char*,modelCount> prefixes{"krock2_","krock_","kcyber_","thic_","wood_","mv2_","sevens_","station_"}; return prefixes[static_cast<size_t>(model)]; }
+inline int count(int model) { constexpr std::array<int,modelCount> counts{5,4,3,5,6,5,0,6,6,6,6,5,5}; return counts[static_cast<size_t>(model)]; }
+inline juce::String prefix(int model) { constexpr std::array<const char*,modelCount> prefixes{"krock2_","krock_","kcyber_","thic_","wood_","mv2_","sevens_","station_","guitar2_","cathedral5_","beyond_","plate140_","plate240_"}; return prefixes[static_cast<size_t>(model)]; }
 inline juce::String id(int model,int index) { return prefix(model)+juce::String(index); }
 inline juce::String matchId(int model) { return prefix(model)+"matchEnabled"; }
 inline juce::String originalId(int model) { return prefix(model)+"original"; }
@@ -16,13 +16,15 @@ inline juce::String linkId(int model) { return prefix(model)+"linkIO"; }
 inline int primaryCount(int model) { return count(model); }
 inline int primaryIndex(int,int column) { return column; }
 inline float defaultValue(int model,int index) {
-    constexpr std::array<std::array<float,maxParameters>,modelCount> values{{{.5f,.75f,1.f,.25f,.5f},{.5f,1.f,1.f,.5f},{.5f,1.f,.5f},{.5f,1.f,1.f,0.f,1.f},{.5f,.5f,.25f,.5f,.75f,.5f},{.5f,.5f,.5f,1.f,1.f},{},{.5f,.5f,.5f,.5f,.9f,.5f}}};
+    constexpr std::array<std::array<float,maxParameters>,modelCount> values{{{.5f,.75f,1.f,.25f,.5f},{.5f,1.f,1.f,.5f},{.5f,1.f,.5f},{.5f,1.f,1.f,0.f,1.f},{.5f,.5f,.25f,.5f,.75f,.5f},{.5f,.5f,.5f,1.f,1.f},{},{.5f,.5f,.5f,.5f,.9f,.5f},{.5f,.5f,.5f,.5f,.5f,.5f},{.5f,.5f,.24f,.5f,.5f,.5f},{.5f,1.f,.5f,.5f,0.f,.5f},{1.f,.5f,1.f,0.f,.25f},{1.f,.5f,1.f,0.f,.25f}}};
     return values[static_cast<size_t>(model)][static_cast<size_t>(index)];
 }
 inline int latency(int) { return 0; }
 inline juce::StringArray choices() { juce::StringArray result; for(auto* name:models) result.add(name); return result; }
 inline const char* name(int model,int index) {
-    if(model==7) return name(4,index);
+    if(model==7 || model==8 || model==9) return name(4,index);
+    if(model==10) { constexpr std::array<const char*,6> names{"Regen","Derez","Filter","Early RF","Pre-delay","Dry/Wet"}; return names[static_cast<size_t>(index)]; }
+    if(model==11 || model==12) { constexpr std::array<const char*,5> names{"Input","Regen","DeRez","Pre-delay","Wetness"}; return names[static_cast<size_t>(index)]; }
     if(model>=3) {
         constexpr std::array<std::array<const char*,maxParameters>,4> names{{
             {"Replace","Derez","Filter","Wider","Dry/Wet"},
@@ -43,6 +45,9 @@ inline juce::String defaultsText(int model) {
     return text;
 }
 inline juce::String tip(int model,int index) {
+    if(model>=11 && index==0) return "Original plate input pad. Default 100%. Independent of wrapper Input trim.";
+    if(model>=11 && index==4) return "Original Wetness mapping: 0% dry only, 50% full dry plus full wet, 100% wet only. Default 25%.";
+    if(model>=10 && juce::String(name(model,index))=="Pre-delay") return "Original normalized pre-delay mapping. Default 0%; not a millisecond readout.";
     if(model>=3) {
         auto text="Original Airwindows "+juce::String(name(model,index))+" control. Default "+juce::String(defaultValue(model,index)*100.f,0)+"%.";
         if(juce::String(name(model,index))=="Dry/Wet") text+=" Original dry/wet mapping; use 100% wet for a send effect.";

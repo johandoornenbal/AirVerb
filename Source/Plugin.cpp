@@ -9,6 +9,11 @@
 #include "MV2Engine.h"
 #include "VerbSevensEngine.h"
 #include "kStationEngine.h"
+#include "kGuitarHall2Engine.h"
+#include "kCathedral5Engine.h"
+#include "kBeyondEngine.h"
+#include "kPlate140Engine.h"
+#include "kPlate240Engine.h"
 
 #include "VerbControls.h"
 
@@ -73,7 +78,7 @@ public:
     }
     int selectedModel() const { return juce::jlimit(0,controls::modelCount-1,juce::roundToInt(modelValue->load())); }
     void prepareToPlay(double rate,int maximumBlockSize) override {
-        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate);
+        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate); engine8.reset(rate); engine9.reset(rate); engine10.reset(rate); engine11.reset(rate); engine12.reset(rate);
         dryHistory={};
         activeModel=selectedModel(); setLatencySamples(controls::latency(activeModel)); peaks[0]=0; peaks[1]=0;
         meterTimeoutSeconds.store(juce::jmax(.15,2.0*maximumBlockSize/rate),std::memory_order_relaxed);
@@ -149,6 +154,11 @@ public:
             case 5: render(engine5,b,model); break;
             case 6: render(engine6,b,model); break;
             case 7: render(engine7,b,model); break;
+            case 8: render(engine8,b,model); break;
+            case 9: render(engine9,b,model); break;
+            case 10: render(engine10,b,model); break;
+            case 11: render(engine11,b,model); break;
+            case 12: render(engine12,b,model); break;
             default: break;
         }
         publishMeters(b);
@@ -268,6 +278,11 @@ private:
                 case 5: engine5.reset(sampleRate); break;
                 case 6: engine6.reset(sampleRate); break;
                 case 7: engine7.reset(sampleRate); break;
+                case 8: engine8.reset(sampleRate); break;
+                case 9: engine9.reset(sampleRate); break;
+                case 10: engine10.reset(sampleRate); break;
+                case 11: engine11.reset(sampleRate); break;
+                case 12: engine12.reset(sampleRate); break;
                 default: break;
             }
             setLatencySamples(controls::latency(model));
@@ -318,6 +333,11 @@ private:
     MV2Engine engine5;
     VerbSevensEngine engine6;
     kStationEngine engine7;
+    kGuitarHall2Engine engine8;
+    kCathedral5Engine engine9;
+    kBeyondEngine engine10;
+    kPlate140Engine engine11;
+    kPlate240Engine engine12;
     // [0] is the previous input sample; [1] is two samples back.
     std::array<std::array<double,2>,2> dryHistory{};
     std::array<double,2> alignedDry(double left,double right,int delay) {

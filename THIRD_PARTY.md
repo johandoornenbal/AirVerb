@@ -6,7 +6,8 @@ Source: https://github.com/airwindows/airwindows
 Commit: `7fd5f5cae262a41e6dd7d9a83d60c46e84d3092a` (retrieved 2026-11-06).
 The original `plugins/WinVST/kRockstar2`, `plugins/WinVST/kRockstar` and
 `plugins/WinVST/kCyberCity`, `VerbThic`, `kWoodRoom`, `MV2`, `VerbSevens` and
-`kStation` headers (all under `plugins/WinVST/`),
+`kStation`, `kGuitarHall2`, `kCathedral5`, `kBeyond`, `kPlate140` and `kPlate240`
+headers (all under `plugins/WinVST/`),
 wrappers and processing sources are retained byte-for-byte under
 `third_party/airwindows/`, together with the upstream MIT license.
 Copyright Chris Johnson / Airwindows.
