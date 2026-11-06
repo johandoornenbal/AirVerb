@@ -1,0 +1,77 @@
+cmake_minimum_required(VERSION 3.22)
+# Release support: Apple Silicon (M2 and later), macOS 11+.
+if(CMAKE_HOST_APPLE)
+  if(NOT DEFINED CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "Supported Mac architecture")
+  endif()
+  if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+    message(FATAL_ERROR "AirVerb supports native Apple Silicon arm64 builds only")
+  endif()
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum macOS version")
+endif()
+project(AirVerbStudio VERSION 0.1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(CTest)
+add_library(verb_engine Source/kRockstar2Engine.cpp Source/kRockstarEngine.cpp)
+set_target_properties(verb_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(verb_engine PUBLIC Source)
+if(MSVC)
+  target_compile_definitions(verb_engine PUBLIC _USE_MATH_DEFINES)
+endif()
+if(BUILD_TESTING)
+  foreach(model IN ITEMS kRockstar2 kRockstar)
+    add_executable(reference_${model} tests/Reference${model}.cpp)
+    target_include_directories(reference_${model} PRIVATE tests/shim)
+    target_link_libraries(reference_${model} PRIVATE verb_engine)
+    add_test(NAME upstream_${model} COMMAND reference_${model})
+  endforeach()
+  add_library(ebur128_reference STATIC third_party/libebur128/ebur128.c)
+  target_include_directories(ebur128_reference PUBLIC third_party/libebur128 PRIVATE third_party/libebur128/queue)
+  if(UNIX)
+    target_link_libraries(ebur128_reference PUBLIC m)
+  endif()
+  add_executable(loudness_tests tests/LoudnessTests.cpp)
+  target_include_directories(loudness_tests PRIVATE Source)
+  target_link_libraries(loudness_tests PRIVATE ebur128_reference)
+  add_test(NAME loudness_match COMMAND loudness_tests)
+endif()
+option(AIRVERB_DSP_ONLY "Build engine and loudness tests without GUI dependencies" OFF)
+if(AIRVERB_DSP_ONLY)
+  return()
+endif()
+include(FetchContent)
+set(JUCE_PATH "" CACHE PATH "Optional existing JUCE 8.0.12 checkout")
+if(JUCE_PATH)
+  add_subdirectory("${JUCE_PATH}" "${CMAKE_BINARY_DIR}/JUCE")
+else()
+  FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG 29396c22c93392d6738e021b83196283d6e4d850 GIT_SHALLOW FALSE)
+  FetchContent_MakeAvailable(JUCE)
+endif()
+juce_add_plugin(AirVerbStudio
+  COMPANY_NAME "Doornenbal Audio"
+  BUNDLE_ID "nl.doornenbal.airverbstudio"
+  PLUGIN_MANUFACTURER_CODE Jdau
+  PLUGIN_CODE Avb1
+  FORMATS VST3
+  PRODUCT_NAME "AirVerb Studio"
+  IS_SYNTH FALSE NEEDS_MIDI_INPUT FALSE NEEDS_MIDI_OUTPUT FALSE
+  IS_MIDI_EFFECT FALSE EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+  COPY_PLUGIN_AFTER_BUILD FALSE VST3_CATEGORIES Fx Reverb)
+juce_generate_juce_header(AirVerbStudio)
+target_sources(AirVerbStudio PRIVATE Source/Plugin.cpp)
+target_compile_definitions(AirVerbStudio PUBLIC
+  JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+  JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(AirVerbStudio PRIVATE verb_engine juce::juce_audio_utils
+  PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+if(BUILD_TESTING)
+  foreach(test IN ITEMS PluginChecks LevelMatchChecks)
+    add_executable(${test} tests/${test}.cpp)
+    target_include_directories(${test} PRIVATE "${JUCE_MODULES_DIR}")
+    target_compile_definitions(${test} PRIVATE JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
+    target_link_libraries(${test} PRIVATE AirVerbStudio)
+    add_test(NAME ${test} COMMAND ${test})
+  endforeach()
+endif()
