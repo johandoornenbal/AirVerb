@@ -14,6 +14,9 @@
 #include "kBeyondEngine.h"
 #include "kPlate140Engine.h"
 #include "kPlate240Engine.h"
+#include "EchojamEngine.h"
+#include "ClearCoatEngine.h"
+#include "Srsly3Engine.h"
 
 #include "VerbControls.h"
 
@@ -30,6 +33,8 @@ public:
         state(*this,nullptr,"AirVerbState",layout()) {
         for(int model=0;model<controls::modelCount;++model)
             for(int i=0;i<controls::count(model);++i) values[static_cast<size_t>(model)][static_cast<size_t>(i)]=state.getRawParameterValue(controls::id(model,i));
+        for(int i=0;i<6;++i) widthValues[static_cast<size_t>(i)]=state.getRawParameterValue(controls::widthId(i));
+        reverbEnabled=state.getRawParameterValue("reverbEnabled"); widthEnabled=state.getRawParameterValue("srsly3Enabled");
         modelValue=state.getRawParameterValue("model");
         defaults=state.copyState();
         for(int model=0;model<controls::modelCount;++model) {
@@ -74,11 +79,23 @@ public:
         for(int model:{0,1}) addComparison(model);
         for(int model:{0,1}) addTrims(model);
         for(int model=2;model<controls::modelCount;++model) { addBank(model); addLink(model); addComparison(model); addTrims(model); }
+        p.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"reverbEnabled",1},"Reverb stage enabled",true));
+        p.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"srsly3Enabled",1},"Srsly3 stage enabled",false));
+        for(int i=0;i<6;++i) {
+            const auto attr=juce::AudioParameterFloatAttributes()
+                .withStringFromValueFunction([i](float v,int) { return controls::display(i,v); })
+                .withValueFromStringFunction([i](const juce::String& text) { return static_cast<float>(controls::parse(i,text)); });
+            p.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{controls::widthId(i),1},
+                "Srsly3 "+juce::String(controls::widthNames[static_cast<size_t>(i)]),juce::NormalisableRange<float>(0,1),controls::widthDefaults[static_cast<size_t>(i)],attr));
+        }
         return p;
     }
     int selectedModel() const { return juce::jlimit(0,controls::modelCount-1,juce::roundToInt(modelValue->load())); }
     void prepareToPlay(double rate,int maximumBlockSize) override {
-        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate); engine8.reset(rate); engine9.reset(rate); engine10.reset(rate); engine11.reset(rate); engine12.reset(rate);
+        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate); engine8.reset(rate); engine9.reset(rate); engine10.reset(rate); engine11.reset(rate); engine12.reset(rate); engine13.reset(rate); engine14.reset(rate); engine15.reset(rate);
+        reverbBlend.reset(rate,.01); widthBlend.reset(rate,.01);
+        reverbBlend.setCurrentAndTargetValue(reverbEnabled->load()>.5f?1.:0.);
+        widthBlend.setCurrentAndTargetValue(widthEnabled->load()>.5f?1.:0.);
         dryHistory={};
         activeModel=selectedModel(); setLatencySamples(controls::latency(activeModel)); peaks[0]=0; peaks[1]=0;
         meterTimeoutSeconds.store(juce::jmax(.15,2.0*maximumBlockSize/rate),std::memory_order_relaxed);
@@ -94,8 +111,11 @@ public:
     template<class Engine,class T> void render(Engine& e,juce::AudioBuffer<T>& b,int model) {
         for(int i=0;i<controls::count(model);++i) e.setParameter(i,values[static_cast<size_t>(model)][static_cast<size_t>(i)]->load());
         // Fixed stack storage preserves dry input without allocating on the audio thread.
-        // Measure the original input and unmatched reverb output, then apply a separate gain.
-        std::array<T,256> dryL{},dryR{};
+        // Measure the original input and unmatched two-stage output, then apply a separate gain.
+        std::array<T,256> dryL{},dryR{},stageL{},stageR{};
+        for(int i=0;i<6;++i) engine15.setParameter(i,widthValues[static_cast<size_t>(i)]->load());
+        reverbBlend.setTargetValue(reverbEnabled->load()>.5f?1.:0.);
+        widthBlend.setTargetValue(widthEnabled->load()>.5f?1.:0.);
         for(int offset=0;offset<b.getNumSamples();offset+=256) {
             const int count=juce::jmin(256,b.getNumSamples()-offset);
             auto* left=b.getWritePointer(0)+offset; auto* right=b.getWritePointer(1)+offset;
@@ -106,9 +126,24 @@ public:
                 const auto gain=inputSmooth.getNextValue();
                 if(gain<1. || gain>1.) { left[i]=static_cast<T>(left[i]*gain); right[i]=static_cast<T>(right[i]*gain); }
             }
+            std::copy_n(left,count,stageL.data()); std::copy_n(right,count,stageR.data());
             T* data[]{left,right};
             if constexpr (std::is_same_v<T,float>) e.processReplacing(data,data,count);
             else e.processDoubleReplacing(data,data,count);
+            for(int i=0;i<count;++i) {
+                const auto mix=reverbBlend.getNextValue();
+                if(mix<=0.) { left[i]=stageL[i]; right[i]=stageR[i]; }
+                else if(mix<1.) { left[i]=static_cast<T>(stageL[i]*(1.-mix)+left[i]*mix); right[i]=static_cast<T>(stageR[i]*(1.-mix)+right[i]*mix); }
+            }
+            std::copy_n(left,count,stageL.data()); std::copy_n(right,count,stageR.data());
+            T* widthData[]{stageL.data(),stageR.data()};
+            if constexpr(std::is_same_v<T,float>) engine15.processReplacing(widthData,widthData,count);
+            else engine15.processDoubleReplacing(widthData,widthData,count);
+            for(int i=0;i<count;++i) {
+                const auto mix=widthBlend.getNextValue();
+                if(mix>=1.) { left[i]=stageL[i]; right[i]=stageR[i]; }
+                else if(mix>0.) { left[i]=static_cast<T>(left[i]*(1.-mix)+stageL[i]*mix); right[i]=static_cast<T>(right[i]*(1.-mix)+stageR[i]*mix); }
+            }
             gainSmooth.setTargetValue(targetGain(model));
             blendSmooth.setTargetValue(original[static_cast<size_t>(model)]->load()>.5f?0.:1.);
             for(int i=0;i<count;++i) {
@@ -159,6 +194,8 @@ public:
             case 10: render(engine10,b,model); break;
             case 11: render(engine11,b,model); break;
             case 12: render(engine12,b,model); break;
+            case 13: render(engine13,b,model); break;
+            case 14: render(engine14,b,model); break;
             default: break;
         }
         publishMeters(b);
@@ -283,6 +320,8 @@ private:
                 case 10: engine10.reset(sampleRate); break;
                 case 11: engine11.reset(sampleRate); break;
                 case 12: engine12.reset(sampleRate); break;
+                case 13: engine13.reset(sampleRate); break;
+                case 14: engine14.reset(sampleRate); break;
                 default: break;
             }
             setLatencySamples(controls::latency(model));
@@ -338,6 +377,13 @@ private:
     kBeyondEngine engine10;
     kPlate140Engine engine11;
     kPlate240Engine engine12;
+    EchojamEngine engine13;
+    ClearCoatEngine engine14;
+    Srsly3Engine engine15;
+    std::array<std::atomic<float>*,6> widthValues{};
+    std::atomic<float>* reverbEnabled=nullptr;
+    std::atomic<float>* widthEnabled=nullptr;
+    juce::SmoothedValue<double> reverbBlend{1.},widthBlend{0.};
     // [0] is the previous input sample; [1] is two samples back.
     std::array<std::array<double,2>,2> dryHistory{};
     std::array<double,2> alignedDry(double left,double right,int delay) {
@@ -405,7 +451,7 @@ public:
         }
         inputSlider.setName("Input trim"); outputSlider.setName("Output trim");
         inputSlider.setTooltip("Wrapper input trim before the reverb, -24 to +24 dB. Double-click for unity.");
-        outputSlider.setTooltip("Wrapper output trim after the reverb, before LUFS matching. Double-click for unity.");
+        outputSlider.setTooltip("Wrapper output trim after Reverb + Srsly3, before LUFS matching. Double-click for unity.");
         linkToggle.setButtonText("Link Input / Output");
         linkToggle.setName("Link Input / Output");
         linkToggle.setTooltip("Move Output by the opposite gain change when editing Input. Output edits set a new reference. Compensation stops at the output range limits.");
@@ -426,7 +472,7 @@ public:
         learnButton.setTooltip("Learn a fixed LUFS level match for the selected model from up to 15 seconds of audible audio. Finish after at least 3 seconds.");
         resetMatchButton.setTooltip("Clear only this model's learned adjustment. Reverb controls, trims, linking and A/B remain as set.");
         enableMatchButton.setTooltip("Enable or disable this model's saved level match.");
-        originalButton.setTooltip("Compare untouched input with the reverb output, using a short crossfade. Reverb keeps running so its tail continues when returning to Processed.");
+        originalButton.setTooltip("Compare untouched input with the complete Reverb + Srsly3 output, using a short crossfade. Reverb keeps running so its tail continues when returning to Processed.");
         addAndMakeVisible(matchReadout); addAndMakeVisible(matchStatus);
         matchReadout.setComponentID("matchReadout"); matchStatus.setComponentID("matchStatus");
         matchReadout.setColour(juce::Label::textColourId,style::gold);
@@ -482,11 +528,40 @@ public:
             processor.updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withNonParameterStateChanged(true));
             if(sizeChanged) sizeChanged();
         };
-        setSize(980,830); startTimerHz(60);
+        for(int i=0;i<6;++i) {
+            auto& slider=widthKnobs[static_cast<size_t>(i)]; addAndMakeVisible(slider);
+            slider.setName("Srsly3 "+juce::String(controls::widthNames[static_cast<size_t>(i)])); slider.setComponentID(controls::widthId(i));
+            slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+            slider.setRotaryParameters(juce::MathConstants<float>::pi*1.25f,juce::MathConstants<float>::pi*2.75f,true);
+            slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,115,23);
+            widthAttachments[static_cast<size_t>(i)]=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state,controls::widthId(i),slider);
+            slider.setDoubleClickReturnValue(true,controls::widthDefaults[static_cast<size_t>(i)]);
+            slider.setTooltip("Original Airwindows Srsly3 "+juce::String(controls::widthNames[static_cast<size_t>(i)])+" control. Native normalized mapping; double-click to reset.");
+        }
+        for(auto* button:{&reverbSwitch,&widthSwitch,&widthReset}) {
+            addAndMakeVisible(*button); button->setColour(juce::TextButton::buttonColourId,style::ink);
+            button->setColour(juce::TextButton::textColourOffId,style::gold);
+            button->setColour(juce::TextButton::buttonOnColourId,style::gold);
+            button->setColour(juce::TextButton::textColourOnId,style::ink);
+        }
+        reverbSwitch.setComponentID("reverbEnabled"); widthSwitch.setComponentID("srsly3Enabled"); widthReset.setComponentID("resetSrsly3");
+        reverbSwitch.setClickingTogglesState(true); widthSwitch.setClickingTogglesState(true);
+        reverbSwitchAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.state,"reverbEnabled",reverbSwitch);
+        widthSwitchAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.state,"srsly3Enabled",widthSwitch);
+        reverbSwitch.setTooltip("Enable the selected reverb stage. Srsly3 remains independently switchable. 10 ms wrapper bypass fade.");
+        widthSwitch.setTooltip("Enable Srsly3 after the reverb and before LUFS comparison/matching. Off by default. 10 ms wrapper bypass fade.");
+        widthReset.onClick=[this] {
+            for(int i=0;i<6;++i) { auto* parameter=processor.state.getParameter(controls::widthId(i));
+                parameter->beginChangeGesture(); parameter->setValueNotifyingHost(parameter->getDefaultValue()); parameter->endChangeGesture(); }
+        };
+        setSize(1320,830); startTimerHz(60);
     }
     ~VerbPanel() override { stopTimer(); setLookAndFeel(nullptr); }
     std::function<void()> sizeChanged;
     void resized() override {
+        reverbSwitch.setBounds(426,294,128,26);
+        widthSwitch.setBounds(1000,175,280,32); widthReset.setBounds(1000,712,280,30);
+        for(int i=0;i<6;++i) widthKnobs[static_cast<size_t>(i)].setBounds(990+(i%2)*150,267+(i/2)*140,145,120);
         sizeChoice.setBounds(750,10,180,26);
         const auto columns=controls::primaryCount(shownModel);
         const auto spacing=columns>4?884/columns:190;
@@ -549,6 +624,15 @@ public:
         g.setColour(ink.withAlpha(.65f)); g.setFont(juce::FontOptions(11.f));
         g.drawText(controls::modelName(shownModel)+" by Airwindows  /  Independent studio edition",32,796,710,24,juce::Justification::left);
         g.drawText("STEREO  /  FLOAT / DOUBLE",700,796,248,24,juce::Justification::right);
+        g.setColour(ink); g.fillRoundedRectangle(980,108,324,680,16);
+        g.setColour(gold); g.setFont(juce::FontOptions(25.f));
+        g.drawText("Srsly3",1000,126,280,35,juce::Justification::centred);
+        g.setFont(juce::FontOptions(11.f));
+        g.drawText("02 / AFTER REVERB",1000,218,280,22,juce::Justification::centred);
+        for(int i=0;i<6;++i) g.drawText(juce::String(controls::widthNames[static_cast<size_t>(i)]).toUpperCase(),990+(i%2)*150,246+(i/2)*140,145,22,juce::Justification::centred);
+        g.setColour(cream.withAlpha(.65f));
+        g.drawText("LUFS MATCH FOLLOWS BOTH STAGES",990,755,304,20,juce::Justification::centred);
+
     }
 private:
     void bindModel(int model) {
@@ -607,6 +691,9 @@ private:
         }
         bindModel(processor.selectedModel());
         refreshMatch();
+        reverbSwitch.setButtonText(reverbSwitch.getToggleState()?"REVERB ON":"REVERB OFF");
+        widthSwitch.setButtonText(widthSwitch.getToggleState()?"SRSLY3 ON":"SRSLY3 OFF");
+        for(auto& slider:widthKnobs) slider.setAlpha(widthSwitch.getToggleState()?1.f:.4f);
         const auto now=juce::Time::getMillisecondCounterHiRes();
         const auto elapsed=(now-lastMeterTime)*.001;
         lastMeterTime=now;
@@ -627,6 +714,10 @@ private:
     style::Look look;
     std::array<juce::Slider,controls::maxParameters> knobs;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>,controls::maxParameters> attachments;
+    std::array<juce::Slider,6> widthKnobs;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>,6> widthAttachments;
+    juce::TextButton reverbSwitch{"REVERB ON"},widthSwitch{"SRSLY3 OFF"},widthReset{"RESET SRSLY3"};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> reverbSwitchAttachment,widthSwitchAttachment;
     juce::Slider inputSlider,outputSlider;
     juce::ToggleButton linkToggle;
     std::unique_ptr<GainLinkAttachment> gainLinkAttachment;
@@ -656,8 +747,8 @@ private:
     void applySize() {
         const float scale=processor.uiSize.load()==1?.75f:processor.uiSize.load()==3?1.25f:1.f;
         panel.setTransform(juce::AffineTransform::scale(scale));
-        panel.setBounds(0,0,980,830);
-        setSize(juce::roundToInt(980*scale),juce::roundToInt(830*scale));
+        panel.setBounds(0,0,1320,830);
+        setSize(juce::roundToInt(1320*scale),juce::roundToInt(830*scale));
     }
     VerbProcessor& processor;
     VerbPanel panel;

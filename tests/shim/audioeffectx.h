@@ -10,6 +10,7 @@ enum VstPlugCategory { kPlugCategEffect };
 constexpr int kVstMaxProgNameLen=24,kVstMaxParamStrLen=32,kVstMaxProductStrLen=64,kVstMaxVendorStrLen=64;
 inline void vst_strncpy(char* dst,const char* src,int n) { std::strncpy(dst,src,static_cast<size_t>(n)); dst[n]=0; }
 inline void float2string(float v,char* text,int n) { std::snprintf(text,static_cast<size_t>(n),"%f",static_cast<double>(v)); }
+inline void int2string(int v,char* text,int n) { std::snprintf(text,static_cast<size_t>(n),"%d",v); }
 class AudioEffect { public: virtual ~AudioEffect()=default; };
 class AudioEffectX : public AudioEffect {
 public:

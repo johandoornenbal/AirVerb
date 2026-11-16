@@ -13,6 +13,9 @@
 #include "../Source/kBeyondEngine.h"
 #include "../Source/kPlate140Engine.h"
 #include "../Source/kPlate240Engine.h"
+#include "../Source/EchojamEngine.h"
+#include "../Source/ClearCoatEngine.h"
+#include "../Source/Srsly3Engine.h"
 
 #include "../Source/OutputMeter.h"
 #include "../Source/MeterBallistics.h"
@@ -24,7 +27,9 @@ juce::RangedAudioParameter& parameter(juce::AudioProcessor& p,const juce::String
     throw std::runtime_error("Missing parameter "+id.toStdString());
 }
 void select(juce::AudioProcessor& p,int model) { parameter(p,"model").setValueNotifyingHost(parameter(p,"model").convertTo0to1(static_cast<float>(model))); }
-template<class Engine,class T> void compare(juce::AudioProcessor& p,int model,double rate) {
+template<class Engine,class T> void compare(juce::AudioProcessor& p,int model,double rate,bool widthOn=false,bool reverbOn=true) {
+    parameter(p,"srsly3Enabled").setValueNotifyingHost(widthOn?1.f:0.f);
+    parameter(p,"reverbEnabled").setValueNotifyingHost(reverbOn?1.f:0.f);
     select(p,model);
     p.setProcessingPrecision(std::is_same_v<T,float>?juce::AudioProcessor::singlePrecision:juce::AudioProcessor::doublePrecision);
     p.setRateAndBufferSizeDetails(rate,513); p.prepareToPlay(rate,513);
@@ -33,6 +38,9 @@ template<class Engine,class T> void compare(juce::AudioProcessor& p,int model,do
         const auto value=static_cast<float>((i*3+4)%11)*.1f;
         parameter(p,controls::id(model,i)).setValueNotifyingHost(value); reference.setParameter(i,value);
     }
+    auto width=std::make_unique<Srsly3Engine>(); width->reset(rate);
+    for(int i=0;i<6;++i) { const float value=static_cast<float>(i+2)/9.f;
+        parameter(p,controls::widthId(i)).setValueNotifyingHost(value); width->setParameter(i,value); }
     juce::MidiBuffer midi;
     for(int block=0;block<20;++block) {
         const auto n=std::array<int,4>{1,37,257,513}[static_cast<size_t>(block%4)];
@@ -43,8 +51,17 @@ template<class Engine,class T> void compare(juce::AudioProcessor& p,int model,do
         }
         p.processBlock(b,midi);
         T* ptr[]{expected.getWritePointer(0),expected.getWritePointer(1)};
-        if constexpr(std::is_same_v<T,float>) reference.processReplacing(ptr,ptr,n);
-        else reference.processDoubleReplacing(ptr,ptr,n);
+        for(int offset=0;offset<n;offset+=256) {
+            const int count=std::min(256,n-offset); T* data[]{ptr[0]+offset,ptr[1]+offset};
+            if(reverbOn) {
+                if constexpr(std::is_same_v<T,float>) reference.processReplacing(data,data,count);
+                else reference.processDoubleReplacing(data,data,count);
+            }
+            if(widthOn) {
+                if constexpr(std::is_same_v<T,float>) width->processReplacing(data,data,count);
+                else width->processDoubleReplacing(data,data,count);
+            }
+        }
         for(int c=0;c<2;++c) for(int i=0;i<n;++i)
             require(std::isfinite(b.getSample(c,i)) && b.getSample(c,i)==expected.getSample(c,i),"Wrapper altered engine output at unity trims");
     }
@@ -133,6 +150,8 @@ void trimChecks() {
             case 10: defaultOutput<kBeyondEngine>(ptr); break;
             case 11: defaultOutput<kPlate140Engine>(ptr); break;
             case 12: defaultOutput<kPlate240Engine>(ptr); break;
+            case 13: defaultOutput<EchojamEngine>(ptr); break;
+            case 14: defaultOutput<ClearCoatEngine>(ptr); break;
         }
         p->processBlock(audio,midi);
         for(int c=0;c<2;++c) for(int i=0;i<256;++i) require(std::abs(audio.getSample(c,i)-expected.getSample(c,i)*std::pow(10.,-6./20.))<1.e-12,"Output trim applied incorrectly");
@@ -171,7 +190,8 @@ int main() try {
     juce::ScopedJuceInitialiser_GUI init;
     std::unique_ptr<juce::AudioProcessor> p(createPluginFilter());
     require(parameter(*p,"model").getValue()==0,"kRockstar2 is not the default");
-    require(p->getParameters().size()==128,"Unexpected parameter layout");
+    require(p->getParameters().size()==152,"Unexpected parameter layout");
+    require(parameter(*p,"reverbEnabled").getValue()==1.f && parameter(*p,"srsly3Enabled").getValue()==0.f,"Wrong stage defaults");
     juce::StringArray originalIds;
     for(int model:{0,1}) for(int i=0;i<controls::count(model);++i) originalIds.add(controls::id(model,i));
     originalIds.add("model");
@@ -181,12 +201,12 @@ int main() try {
     for(int i=0;i<controls::count(2);++i) originalIds.add(controls::id(2,i));
     originalIds.add(controls::linkId(2)); originalIds.add(controls::matchId(2)); originalIds.add(controls::originalId(2));
     originalIds.add(controls::inputId(2)); originalIds.add(controls::outputId(2));
-    for(int model=3;model<8;++model) {
+    for(int model=3;model<13;++model) {
         for(int i=0;i<controls::count(model);++i) originalIds.add(controls::id(model,i));
         originalIds.add(controls::linkId(model)); originalIds.add(controls::matchId(model)); originalIds.add(controls::originalId(model));
         originalIds.add(controls::inputId(model)); originalIds.add(controls::outputId(model));
     }
-    require(originalIds.size()==75,"Old layout fixture incomplete");
+    require(originalIds.size()==128,"Old layout fixture incomplete");
     for(int i=0;i<originalIds.size();++i) require(dynamic_cast<juce::RangedAudioParameter*>(p->getParameters()[i])->paramID==originalIds[i],"Existing parameter index changed");
     // All native defaults and the public parameter layout are explicit.
     require(p->getName()=="AirVerb Studio","Wrong plugin identity");
@@ -208,17 +228,42 @@ int main() try {
         compare<kCathedral5Engine,float>(*p,9,rate); compare<kCathedral5Engine,double>(*p,9,rate);
         compare<kBeyondEngine,float>(*p,10,rate); compare<kBeyondEngine,double>(*p,10,rate);
         compare<kPlate140Engine,float>(*p,11,rate); compare<kPlate140Engine,double>(*p,11,rate);
+        compare<ClearCoatEngine,float>(*p,14,rate); compare<ClearCoatEngine,double>(*p,14,rate);
+        compare<EchojamEngine,float>(*p,13,rate); compare<EchojamEngine,double>(*p,13,rate);
         compare<kPlate240Engine,float>(*p,12,rate); compare<kPlate240Engine,double>(*p,12,rate);
 
     }
+    for(double rate:{44100.,96000.}) {
+        compare<kRockstar2Engine,float>(*p,0,rate,true); compare<kRockstar2Engine,double>(*p,0,rate,true);
+        compare<kRockstarEngine,float>(*p,1,rate,true); compare<kRockstarEngine,double>(*p,1,rate,true);
+        compare<kCyberCityEngine,float>(*p,2,rate,true); compare<kCyberCityEngine,double>(*p,2,rate,true);
+        compare<VerbThicEngine,float>(*p,3,rate,true); compare<VerbThicEngine,double>(*p,3,rate,true);
+        compare<kWoodRoomEngine,float>(*p,4,rate,true); compare<kWoodRoomEngine,double>(*p,4,rate,true);
+        compare<MV2Engine,float>(*p,5,rate,true); compare<MV2Engine,double>(*p,5,rate,true);
+        compare<VerbSevensEngine,float>(*p,6,rate,true); compare<VerbSevensEngine,double>(*p,6,rate,true);
+        compare<kStationEngine,float>(*p,7,rate,true); compare<kStationEngine,double>(*p,7,rate,true);
+        compare<kGuitarHall2Engine,float>(*p,8,rate,true); compare<kGuitarHall2Engine,double>(*p,8,rate,true);
+        compare<kCathedral5Engine,float>(*p,9,rate,true); compare<kCathedral5Engine,double>(*p,9,rate,true);
+        compare<kBeyondEngine,float>(*p,10,rate,true); compare<kBeyondEngine,double>(*p,10,rate,true);
+        compare<kPlate140Engine,float>(*p,11,rate,true); compare<kPlate140Engine,double>(*p,11,rate,true);
+        compare<kPlate240Engine,float>(*p,12,rate,true); compare<kPlate240Engine,double>(*p,12,rate,true);
+        compare<EchojamEngine,float>(*p,13,rate,true); compare<EchojamEngine,double>(*p,13,rate,true);
+        compare<ClearCoatEngine,float>(*p,14,rate,true); compare<ClearCoatEngine,double>(*p,14,rate,true);
+
+        compare<EchojamEngine,float>(*p,13,rate,true,false);
+        compare<ClearCoatEngine,double>(*p,14,rate,true,false);
+        compare<kRockstar2Engine,double>(*p,0,rate,false,false);
+    }
+    parameter(*p,"reverbEnabled").setValueNotifyingHost(1.f); parameter(*p,"srsly3Enabled").setValueNotifyingHost(0.f);
     meterChecks(); trimChecks();
+    for(int i=0;i<6;++i) parameter(*p,controls::widthId(i)).setValueNotifyingHost(controls::widthDefaults[static_cast<size_t>(i)]);
     UI ui(*p);
-    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,0}) {
+    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0}) {
         ui.selectModel(model);
         require(close(parameter(*p,"model").convertFrom0to1(parameter(*p,"model").getValue()),model),"Selector not bound");
         int visible=0;
         for(auto* child:ui.panel().getChildren()) if(auto* slider=dynamic_cast<juce::Slider*>(child);slider && slider->isVisible()) ++visible;
-        require(visible==controls::count(model)+2,"Wrong visible parameter bank");
+        require(visible==controls::count(model)+8,"Wrong visible parameter bank");
         for(int i=0;i<controls::count(model);++i) {
             auto& slider=ui.slider(controls::name(model,i));
             slider.setValue(.31,juce::sendNotificationSync);
@@ -233,11 +278,18 @@ int main() try {
         for(int size:{1,2,3}) {
             sizes.setSelectedId(size,juce::sendNotificationSync);
             const auto scale=size==1?.75:size==3?1.25:1.;
-            require(ui.editor->getWidth()==juce::roundToInt(980*scale) && ui.editor->getHeight()==juce::roundToInt(830*scale),"Size choice failed");
+            require(ui.editor->getWidth()==juce::roundToInt(1320*scale) && ui.editor->getHeight()==juce::roundToInt(830*scale),"Size choice failed");
             ui.preview(model,size);
         }
         for(int i=0;i<controls::count(model);++i) ui.slider(controls::name(model,i)).setValue(.31,juce::sendNotificationSync);
     }
+    require(ui.selector().getNumItems()==15 && !ui.selector().getItemText(14).contains("Srsly"),"Srsly3 exposed as a reverb choice");
+    auto& widthSlider=ui.slider("Srsly3 Space"); widthSlider.setValue(.73,juce::sendNotificationSync);
+    require(close(parameter(*p,controls::widthId(1)).getValue(),.73),"Srsly3 knob attachment");
+    dynamic_cast<juce::TextButton&>(ui.component("srsly3Enabled")).setToggleState(true,juce::sendNotificationSync);
+    require(parameter(*p,"srsly3Enabled").getValue()==1.f,"Srsly3 switch attachment");
+    dynamic_cast<juce::TextButton&>(ui.component("reverbEnabled")).setToggleState(false,juce::sendNotificationSync);
+    require(parameter(*p,"reverbEnabled").getValue()==0.f,"Reverb switch attachment");
     // Reset only the selected reverb, including trims, while preserving the other bank.
     ui.selectModel(1); ui.slider("Input trim").setValue(3,juce::sendNotificationSync);
     dynamic_cast<juce::TextButton&>(ui.component("resetParameters")).onClick();
@@ -254,7 +306,17 @@ int main() try {
     juce::MemoryBlock bytes; p->getStateInformation(bytes);
     std::unique_ptr<juce::AudioProcessor> restored(createPluginFilter()); restored->setStateInformation(bytes.getData(),static_cast<int>(bytes.getSize()));
     for(auto* raw:p->getParameters()) if(auto* v=dynamic_cast<juce::RangedAudioParameter*>(raw)) require(close(parameter(*restored,v->paramID).getValue(),v->getValue()),"Session lost parameter");
-    UI recalled(*restored); require(recalled.editor->getWidth()==1225,"Session lost UI size");
+    UI recalled(*restored); require(recalled.editor->getWidth()==1650,"Session lost UI size");
+    juce::MemoryBlock legacyBytes;
+    auto legacyXml=juce::AudioProcessor::getXmlFromBinary(bytes.getData(),static_cast<int>(bytes.getSize()));
+    for(int i=legacyXml->getNumChildElements()-1;i>=0;--i) {
+        auto* child=legacyXml->getChildElement(i); const auto id=child->getStringAttribute("id");
+        if(id=="reverbEnabled" || id=="srsly3Enabled" || id.startsWith("srsly3_")) legacyXml->removeChildElement(child,true);
+    }
+    juce::AudioProcessor::copyXmlToBinary(*legacyXml,legacyBytes);
+    restored->setStateInformation(legacyBytes.getData(),static_cast<int>(legacyBytes.getSize()));
+    require(parameter(*restored,"reverbEnabled").getValue()==1.f && parameter(*restored,"srsly3Enabled").getValue()==0.f,"Old session stage defaults");
+    for(int i=0;i<6;++i) require(close(parameter(*restored,controls::widthId(i)).getValue(),controls::widthDefaults[static_cast<size_t>(i)]),"Old session Srsly3 default");
     const char invalid[]{'b','a','d'}; restored->setStateInformation(invalid,3);
     require(close(parameter(*restored,"model").convertFrom0to1(parameter(*restored,"model").getValue()),1),"Invalid state damaged session");
     std::cout<<"Default model, float/double routing, per-model latency, UI banks/sizes, trims/link gestures, meters, reset and session recall passed\n";

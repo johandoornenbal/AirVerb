@@ -2,13 +2,13 @@
 
 A studio interface for **Airwindows kRockstar2 (default), kRockstar, kCyberCity,
 VerbThic, kWoodRoom, MV2, VerbSevens, kStation, kGuitarHall2, kCathedral5,
-kBeyond, kPlate140 and kPlate240**, following
+kBeyond, kPlate140, kPlate240, Echojam and ClearCoat**, following
 [AirEq](https://github.com/johandoornenbal/AirEq) and
 [AirComp](https://github.com/johandoornenbal/AirComp): cream, charcoal and brass,
 analogue output meters, linked trims and learned LUFS compensation.
 
 Native **VST3 for Apple Silicon Macs, M2 and later**, macOS 11+. Original DSP by
-Chris Johnson / Airwindows. All thirteen native algorithms retain their audio calculations,
+Chris Johnson / Airwindows. All sixteen native algorithms retain their audio calculations,
 including the reverb feedback, room tone, downsampling, distance and dry/wet mixing.
 
 ![kRockstar2 editor](docs/ui-krockstar2.png)
@@ -18,6 +18,8 @@ including the reverb feedback, room tone, downsampling, distance and dry/wet mix
 [MV2](docs/ui-mv2.png) · [VerbSevens](docs/ui-verbsevens.png) · [kStation](docs/ui-kstation.png) ·
 [kGuitarHall2](docs/ui-kguitarhall2.png) · [kCathedral5](docs/ui-kcathedral5.png) ·
 [kBeyond](docs/ui-kbeyond.png) · [kPlate140](docs/ui-kplate140.png) · [kPlate240](docs/ui-kplate240.png)
+
+[Echojam](docs/ui-echojam.png) · [ClearCoat](docs/ui-clearcoat.png) · [Srsly3 stage](docs/ui-echojam.png)
 
 ## Controls
 
@@ -36,6 +38,33 @@ including the reverb feedback, room tone, downsampling, distance and dry/wet mix
 | kBeyond | Regen, Derez, Filter, Early RF, Pre-delay, Dry/Wet | 50%, 100%, 50%, 50%, 0%, 50% |
 | kPlate140 | Input, Regen, DeRez, Pre-delay, Wetness | 100%, 50%, 100%, 0%, 25% |
 | kPlate240 | Input, Regen, DeRez, Pre-delay, Wetness | 100%, 50%, 100%, 0%, 25% |
+| Echojam | Select, Regen, Speed, Dry/Wet | All 50% |
+| ClearCoat | Select, Dry/Wet | 50%, 100% |
+| Srsly3 | Center, Space, Level, Q, Nonlin, Dry/Wet | 50%, 50%, 100%, 50%, 50%, 100% |
+
+Echojam and ClearCoat retain the original continuous Select mapping to 17
+patterns (0–16), displayed on the normalized percentage scale. Echojam Speed is
+its native normalized control, without added tempo sync or time conversion.
+ClearCoat defaults to fully wet. The original feedback, tails and dry/wet laws
+are unchanged. Each model has independent trims, linking, LUFS matching and A/B.
+The two new ports can be regenerated with `scripts/port-echojam.py` and
+`scripts/port-clearcoat.py`.
+
+Srsly3 is a separate optional second stage after **every** reverb choice; it is
+not in the reverb menu. **Reverb defaults ON; Srsly3 defaults OFF**, so new
+instances have no added widening. Each stage has its own automatable on/off
+switch and a 10 ms wrapper crossfade; the Airwindows DSP is unchanged. Srsly3's
+six native controls are shared across reverb choices and saved with the session.
+Reset Srsly3 resets only those six controls; Reset to Default affects only the
+selected reverb and its trims. `scripts/port-srsly3.py` reproduces its adapter.
+
+The chain is **Input trim → Reverb → Srsly3 → Output trim → LUFS matching →
+Original/Processed comparison**. Disabled stages pass audio through. Both engines
+continue running behind their stage switches and Original A/B. LUFS learning
+measures the complete enabled chain, and compensation follows both stages.
+Relearn matching after changing either stage's controls or switches. Learned
+matches remain per reverb model; Srsly3's stage settings are shared. Srsly3 Level
+is the original native control, separate from wrapper Output trim.
 
 VerbSevens has no native parameters; its interface keeps the original fixed
 processing and offers only wrapper trims, LUFS matching and A/B. MV2 Output is
@@ -103,10 +132,10 @@ when exporting offline. Delay-buffer history is not serialized in sessions.
 
 ## Existing sessions
 
-All 75 parameter IDs and indices from the eight-model release are unchanged.
-Two-, three- and eight-model sessions retain their controls and learned matches;
+All 128 parameter IDs and indices from the thirteen-model release are unchanged.
+Two-, three-, eight- and thirteen-model sessions retain their controls and learned matches;
 missing banks start at native defaults with no learned match. The model selector
-now has thirteen choices, so automation of
+now has fifteen choices, so automation of
 that selector may need updating for the expanded range.
 
 ## One-command Mac build and install
@@ -158,8 +187,9 @@ configure with `-DJUCE_PATH=/workspace/deps/JUCE`. `scripts/setup-cloud.sh` sets
 the rootless Debian tools and development dependencies if needed. Linux builds
 are for development; release support targets Apple Silicon Macs.
 
-The thirteen native reference suites compare float/double output exactly against the
-untouched upstream VST2 sources with matched seeds: 96 scenarios per algorithm,
+The sixteen native reference suites compare float/double output exactly against the
+untouched upstream VST2 sources with matched seeds: 96 scenarios per existing algorithm
+and 160 each for Echojam/ClearCoat (including all 17 selector patterns),
 44.1–192 kHz, silence, parameter extremes and automation, variable blocks,
 reverb tails and reset. Loudness tests compare with independent libebur128.
 Plugin checks cover exact routing, defaults, trims/link gestures, bypass, metering,
@@ -167,9 +197,12 @@ all three editor sizes, typed/reset controls and session recall. LUFS integratio
 checks cover learning, fixed compensation placement, relearning, per-model isolation,
 Original A/B, reset, cancellation, silent input and automatic completion.
 
-Linux Release VST3 compilation and all sixteen test suites passed in this development
-instance, including 1,248 exact upstream comparisons (maximum absolute error 0).
-All thirteen editors rendered at all three sizes. The installer passed shell syntax and
+Linux Release VST3 compilation and all nineteen test suites passed, including
+1,664 exact upstream comparisons (maximum absolute error 0). Two-stage checks
+cover both precisions, every reverb followed by Srsly3, independent stage switches,
+legacy state defaults and LUFS measurement/compensation after the complete chain.
+Native macOS signing and DAW playback were not run in this Linux workspace.
+All fifteen reverb editors with the separate Srsly3 panel rendered at all three sizes. The installer passed shell syntax and
 simulated success, signing failure and replacement-failure rollback checks.
 
 ## Licensing

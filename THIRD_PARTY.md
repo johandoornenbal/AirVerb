@@ -67,3 +67,21 @@ with the applicable JUCE license, including corresponding source obligations whe
 using AGPLv3, or use an appropriate commercial license. The wrapper's MIT license
 does not relicense JUCE. Retain the VST3 SDK notices bundled with JUCE.
 This is an independent adaptation, not an official Airwindows or JUCE release.
+
+## Airwindows Echojam and ClearCoat
+
+Chris Johnson / Airwindows, MIT. Retrieved November 16, 2026 from commit
+`143a86df3642881e0be4bf827815050721063b41`:
+https://github.com/airwindows/airwindows/tree/143a86df3642881e0be4bf827815050721063b41/plugins/WinVST
+
+The three original files per effect are retained verbatim in their corresponding
+`third_party/airwindows/` directories. `scripts/port-echojam.py` and
+`scripts/port-clearcoat.py` reproduce the SDK-free engines with the established
+fixed seeds, original defaults, initialization and unchanged processing bodies.
+Reference tests match both precisions exactly against the original sources,
+including all 17 selector patterns, silence, tails, automation and reset.
+
+Srsly3 is from the same `143a86df3642881e0be4bf827815050721063b41` pin,
+under `plugins/WinVST/Srsly3`, with the same Chris Johnson / Airwindows MIT license.
+Its three original files are retained verbatim; `scripts/port-srsly3.py` reproduces
+the adapter, preserving all six native controls and processing expressions.

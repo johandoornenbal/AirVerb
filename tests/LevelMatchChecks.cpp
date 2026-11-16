@@ -13,6 +13,9 @@
 #include "../Source/kBeyondEngine.h"
 #include "../Source/kPlate140Engine.h"
 #include "../Source/kPlate240Engine.h"
+#include "../Source/EchojamEngine.h"
+#include "../Source/ClearCoatEngine.h"
+#include "../Source/Srsly3Engine.h"
 
 #include "../Source/LoudnessMatch.h"
 #include <iostream>
@@ -52,13 +55,16 @@ void fill(juce::AudioBuffer<double>& b,int base) {
         b.setSample(1,i,.07*std::sin(t*2*3.141592653589793*521));
     }
 }
-template<class Engine> void learn(juce::AudioProcessor& p,UI& ui,int model) {
+template<class Engine> void learn(juce::AudioProcessor& p,UI& ui,int model,bool widthOn=false) {
+    param(p,"srsly3Enabled").setValueNotifyingHost(widthOn?1.f:0.f);
     ui.select(model);
     param(p,controls::originalId(model)).setValueNotifyingHost(0);
     p.setProcessingPrecision(juce::AudioProcessor::doublePrecision);
     p.setRateAndBufferSizeDetails(48000,256); p.prepareToPlay(48000,256);
     auto referenceInstance=std::make_unique<Engine>(); auto& reference=*referenceInstance; reference.reset(48000);
     for(int i=0;i<controls::count(model);++i) reference.setParameter(i,param(p,controls::id(model,i)).getValue());
+    auto width=std::make_unique<Srsly3Engine>(); width->reset(48000);
+    for(int i=0;i<6;++i) width->setParameter(i,param(p,controls::widthId(i)).getValue());
     LoudnessMatch expected; expected.prepare(48000); expected.start();
     juce::AudioBuffer<double> b(2,256),wet(2,256); juce::MidiBuffer midi;
     ui.click("learnMatch");
@@ -68,6 +74,7 @@ template<class Engine> void learn(juce::AudioProcessor& p,UI& ui,int model) {
         double* data[]{wet.getWritePointer(0),wet.getWritePointer(1)};
         wet.applyGain(juce::Decibels::decibelsToGain(static_cast<double>(param(p,controls::inputId(model)).convertFrom0to1(param(p,controls::inputId(model)).getValue()))));
         reference.processDoubleReplacing(data,data,256);
+        if(widthOn) width->processDoubleReplacing(data,data,256);
         wet.applyGain(juce::Decibels::decibelsToGain(static_cast<double>(param(p,controls::outputId(model)).convertFrom0to1(param(p,controls::outputId(model)).getValue()))));
         for(int i=0;i<256;++i) expected.sample(b.getSample(0,i),b.getSample(1,i),wet.getSample(0,i),wet.getSample(1,i));
         p.processBlock(b,midi);
@@ -80,6 +87,7 @@ template<class Engine> void learn(juce::AudioProcessor& p,UI& ui,int model) {
         double* data[]{wet.getWritePointer(0),wet.getWritePointer(1)};
         wet.applyGain(juce::Decibels::decibelsToGain(static_cast<double>(param(p,controls::inputId(model)).convertFrom0to1(param(p,controls::inputId(model)).getValue()))));
         reference.processDoubleReplacing(data,data,256);
+        if(widthOn) width->processDoubleReplacing(data,data,256);
         wet.applyGain(juce::Decibels::decibelsToGain(static_cast<double>(param(p,controls::outputId(model)).convertFrom0to1(param(p,controls::outputId(model)).getValue()))));
         p.processBlock(b,midi);
         if(block==7) {
@@ -159,6 +167,8 @@ int main() try {
     learn<kBeyondEngine>(*p,ui,10);
     learn<kPlate140Engine>(*p,ui,11);
     learn<kPlate240Engine>(*p,ui,12);
+    learn<EchojamEngine>(*p,ui,13);
+    learn<ClearCoatEngine>(*p,ui,14);
     in.setValueNotifyingHost(in.getDefaultValue()); out.setValueNotifyingHost(out.getDefaultValue());
     const auto learned=snapshot(*p);
     const double db0=learned.getProperty(key(0,"matchDb")),db1=learned.getProperty(key(1,"matchDb"));
@@ -183,6 +193,8 @@ int main() try {
     verifyAppliedAfterSwitch<kBeyondEngine>(*p,10);
     verifyAppliedAfterSwitch<kPlate140Engine>(*p,11);
     verifyAppliedAfterSwitch<kPlate240Engine>(*p,12);
+    verifyAppliedAfterSwitch<EchojamEngine>(*p,13);
+    verifyAppliedAfterSwitch<ClearCoatEngine>(*p,14);
 
     p->releaseResources();
     for(int model=0;model<controls::modelCount;++model) { original<float>(*p,model); original<double>(*p,model); }
@@ -190,7 +202,7 @@ int main() try {
         param(*p,controls::originalId(model)).setValueNotifyingHost(model%2?1.f:0.f);
         param(*p,controls::matchId(model)).setValueNotifyingHost(model%2?0.f:1.f);
     }
-    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,0,1}) {
+    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0,1}) {
         ui.select(model);
         check(dynamic_cast<juce::TextButton&>(ui.component("matchEnabled")).getToggleState()==(model%2==0),"Model match enable not recalled");
         check(dynamic_cast<juce::TextButton&>(ui.component("abOriginal")).getToggleState()==(model%2==1),"Model A/B not recalled");
@@ -291,5 +303,12 @@ int main() try {
     check(static_cast<bool>(snapshot(*p).getProperty(key(1,"hasMatch"))),"Automatic learn failed");
     check(dynamic_cast<juce::TextButton&>(ui.component("learnMatch")).getButtonText()=="Learn Match","Automatic learn did not stop");
     p->releaseResources();
+    // Verify learning and the applied fixed gain observe the complete two-stage chain.
+    std::unique_ptr<juce::AudioProcessor> chain(createPluginFilter()); UI chainUI(*chain);
+    learn<EchojamEngine>(*chain,chainUI,13,true);
+    learn<ClearCoatEngine>(*chain,chainUI,14,true);
+    original<float>(*chain,13); original<double>(*chain,14);
+    param(*chain,"reverbEnabled").setValueNotifyingHost(0.f);
+    original<double>(*chain,13);
     std::cout<<"Per-model LUFS learning, fixed gain, dry A/B, session recall, reset, switch/bypass cancellation and silence passed\n";
 } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
