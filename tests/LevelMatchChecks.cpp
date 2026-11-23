@@ -15,6 +15,7 @@
 #include "../Source/kPlate240Engine.h"
 #include "../Source/EchojamEngine.h"
 #include "../Source/ClearCoatEngine.h"
+#include "../Source/WoodenChestEngine.h"
 #include "../Source/Srsly3Engine.h"
 
 #include "../Source/LoudnessMatch.h"
@@ -169,6 +170,8 @@ int main() try {
     learn<kPlate240Engine>(*p,ui,12);
     learn<EchojamEngine>(*p,ui,13);
     learn<ClearCoatEngine>(*p,ui,14);
+    param(*p,controls::id(controls::woodenChest,0)).setValueNotifyingHost(7.f/16.f);
+    learn<WoodenChestEngine>(*p,ui,controls::woodenChest);
     in.setValueNotifyingHost(in.getDefaultValue()); out.setValueNotifyingHost(out.getDefaultValue());
     const auto learned=snapshot(*p);
     const double db0=learned.getProperty(key(0,"matchDb")),db1=learned.getProperty(key(1,"matchDb"));
@@ -195,6 +198,7 @@ int main() try {
     verifyAppliedAfterSwitch<kPlate240Engine>(*p,12);
     verifyAppliedAfterSwitch<EchojamEngine>(*p,13);
     verifyAppliedAfterSwitch<ClearCoatEngine>(*p,14);
+    verifyAppliedAfterSwitch<WoodenChestEngine>(*p,controls::woodenChest);
 
     p->releaseResources();
     for(int model=0;model<controls::modelCount;++model) { original<float>(*p,model); original<double>(*p,model); }
@@ -202,7 +206,7 @@ int main() try {
         param(*p,controls::originalId(model)).setValueNotifyingHost(model%2?1.f:0.f);
         param(*p,controls::matchId(model)).setValueNotifyingHost(model%2?0.f:1.f);
     }
-    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0,1}) {
+    for(int model:{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,controls::woodenChest,0,1}) {
         ui.select(model);
         check(dynamic_cast<juce::TextButton&>(ui.component("matchEnabled")).getToggleState()==(model%2==0),"Model match enable not recalled");
         check(dynamic_cast<juce::TextButton&>(ui.component("abOriginal")).getToggleState()==(model%2==1),"Model A/B not recalled");
@@ -307,6 +311,14 @@ int main() try {
     std::unique_ptr<juce::AudioProcessor> chain(createPluginFilter()); UI chainUI(*chain);
     learn<EchojamEngine>(*chain,chainUI,13,true);
     learn<ClearCoatEngine>(*chain,chainUI,14,true);
+    chainUI.select(controls::woodenChest);
+    for(int model=0;model<=controls::woodenChestModelMax;++model){
+        chainUI.click("resetMatch");
+        param(*chain,controls::id(controls::woodenChest,0)).setValueNotifyingHost(
+            static_cast<float>(model)/controls::woodenChestModelMax);
+        learn<WoodenChestEngine>(*chain,chainUI,controls::woodenChest,true);
+    }
+    original<double>(*chain,controls::woodenChest);
     original<float>(*chain,13); original<double>(*chain,14);
     param(*chain,"reverbEnabled").setValueNotifyingHost(0.f);
     original<double>(*chain,13);

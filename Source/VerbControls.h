@@ -1,15 +1,17 @@
 #pragma once
 #include <array>
 namespace controls {
-constexpr int modelCount=15;
+constexpr int woodenChest=15;
+constexpr int woodenChestModelMax=16;
+constexpr int modelCount=16;
 constexpr int maxParameters=6;
 inline constexpr std::array<const char*,6> widthNames{"Center","Space","Level","Q","Nonlin","Dry/Wet"};
 inline constexpr std::array<float,6> widthDefaults{.5f,.5f,1.f,.5f,.5f,1.f};
 inline juce::String widthId(int index) { return "srsly3_"+juce::String(index); }
-constexpr std::array<const char*,modelCount> models{"kRockstar2","kRockstar","kCyberCity","VerbThic","kWoodRoom","MV2","VerbSevens","kStation","kGuitarHall2","kCathedral5","kBeyond","kPlate140","kPlate240","Echojam","ClearCoat"};
+constexpr std::array<const char*,modelCount> models{"kRockstar2","kRockstar","kCyberCity","VerbThic","kWoodRoom","MV2","VerbSevens","kStation","kGuitarHall2","kCathedral5","kBeyond","kPlate140","kPlate240","Echojam","ClearCoat","WoodenChest"};
 inline juce::String modelName(int model) { return models[static_cast<size_t>(model)]; }
-inline int count(int model) { constexpr std::array<int,modelCount> counts{5,4,3,5,6,5,0,6,6,6,6,5,5,4,2}; return counts[static_cast<size_t>(model)]; }
-inline juce::String prefix(int model) { constexpr std::array<const char*,modelCount> prefixes{"krock2_","krock_","kcyber_","thic_","wood_","mv2_","sevens_","station_","guitar2_","cathedral5_","beyond_","plate140_","plate240_","echojam_","clearcoat_"}; return prefixes[static_cast<size_t>(model)]; }
+inline int count(int model) { constexpr std::array<int,modelCount> counts{5,4,3,5,6,5,0,6,6,6,6,5,5,4,2,3}; return counts[static_cast<size_t>(model)]; }
+inline juce::String prefix(int model) { constexpr std::array<const char*,modelCount> prefixes{"krock2_","krock_","kcyber_","thic_","wood_","mv2_","sevens_","station_","guitar2_","cathedral5_","beyond_","plate140_","plate240_","echojam_","clearcoat_","woodenchest_"}; return prefixes[static_cast<size_t>(model)]; }
 inline juce::String id(int model,int index) { return prefix(model)+juce::String(index); }
 inline juce::String matchId(int model) { return prefix(model)+"matchEnabled"; }
 inline juce::String originalId(int model) { return prefix(model)+"original"; }
@@ -19,12 +21,14 @@ inline juce::String linkId(int model) { return prefix(model)+"linkIO"; }
 inline int primaryCount(int model) { return count(model); }
 inline int primaryIndex(int,int column) { return column; }
 inline float defaultValue(int model,int index) {
-    constexpr std::array<std::array<float,maxParameters>,modelCount> values{{{.5f,.75f,1.f,.25f,.5f},{.5f,1.f,1.f,.5f},{.5f,1.f,.5f},{.5f,1.f,1.f,0.f,1.f},{.5f,.5f,.25f,.5f,.75f,.5f},{.5f,.5f,.5f,1.f,1.f},{},{.5f,.5f,.5f,.5f,.9f,.5f},{.5f,.5f,.5f,.5f,.5f,.5f},{.5f,.5f,.24f,.5f,.5f,.5f},{.5f,1.f,.5f,.5f,0.f,.5f},{1.f,.5f,1.f,0.f,.25f},{1.f,.5f,1.f,0.f,.25f},{.5f,.5f,.5f,.5f},{.5f,1.f}}};
+    constexpr std::array<std::array<float,maxParameters>,modelCount> values{{{.5f,.75f,1.f,.25f,.5f},{.5f,1.f,1.f,.5f},{.5f,1.f,.5f},{.5f,1.f,1.f,0.f,1.f},{.5f,.5f,.25f,.5f,.75f,.5f},{.5f,.5f,.5f,1.f,1.f},{},{.5f,.5f,.5f,.5f,.9f,.5f},{.5f,.5f,.5f,.5f,.5f,.5f},{.5f,.5f,.24f,.5f,.5f,.5f},{.5f,1.f,.5f,.5f,0.f,.5f},{1.f,.5f,1.f,0.f,.25f},{1.f,.5f,1.f,0.f,.25f},{.5f,.5f,.5f,.5f},{.5f,1.f},{0.f,.5f,.5f}}};
     return values[static_cast<size_t>(model)][static_cast<size_t>(index)];
 }
+inline bool isStepped(int model,int index) { return model==woodenChest && index==0; }
 inline int latency(int) { return 0; }
 inline juce::StringArray choices() { juce::StringArray result; for(auto* name:models) result.add(name); return result; }
 inline const char* name(int model,int index) {
+    if(model==woodenChest) { constexpr std::array<const char*,3> names{"Model","Resonance","Depth"}; return names[static_cast<size_t>(index)]; }
     if(model==14) { constexpr std::array<const char*,2> names{"Select","Dry/Wet"}; return names[static_cast<size_t>(index)]; }
     if(model==13) { constexpr std::array<const char*,4> names{"Select","Regen","Speed","Dry/Wet"}; return names[static_cast<size_t>(index)]; }
     if(model==7 || model==8 || model==9) return name(4,index);
@@ -46,10 +50,11 @@ inline juce::String description(int model) { return modelName(model).toUpperCase
 inline juce::String defaultsText(int model) {
     if(count(model)==0) return "Original fixed reverb  /  No native controls  /  Use wrapper trims and LUFS matching";
     juce::String text="Defaults: ";
-    for(int i=0;i<count(model);++i) { if(i>0) text+="  /  "; text+=juce::String(name(model,i))+" "+juce::String(defaultValue(model,i)*100.f,0)+"%"; }
+    for(int i=0;i<count(model);++i) { if(i>0) text+="  /  "; text+=juce::String(name(model,i))+" "+(isStepped(model,i)?"0":juce::String(defaultValue(model,i)*100.f,0)+"%"); }
     return text;
 }
 inline juce::String tip(int model,int index) {
+    if(isStepped(model,index)) return "Select one of 17 WoodenChest models, numbered 0–16. Default 0.";
     if((model==13 || model==14) && index==0) return "Original pattern selector: 17 positions (0-16), using the native continuous 0-1 mapping. Default 50%.";
     if(model==13 && index==2) return "Original echo speed mapping. Default 50%; normalized control, not a millisecond or tempo readout.";
     if((model==11 || model==12) && index==0) return "Original plate input pad. Default 100%. Independent of wrapper Input trim.";

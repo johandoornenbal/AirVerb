@@ -16,6 +16,7 @@
 #include "kPlate240Engine.h"
 #include "EchojamEngine.h"
 #include "ClearCoatEngine.h"
+#include "WoodenChestEngine.h"
 #include "Srsly3Engine.h"
 
 #include "VerbControls.h"
@@ -51,6 +52,11 @@ public:
         // Stable parameter IDs and indices for each complete model bank.
         auto addBank=[&p](int model) {
             for(int i=0;i<controls::count(model);++i) {
+                if(controls::isStepped(model,i)){
+                    p.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{controls::id(model,i),1},
+                        "WoodenChest Model",0,controls::woodenChestModelMax,0));
+                    continue;
+                }
                 auto attributes=juce::AudioParameterFloatAttributes()
                     .withStringFromValueFunction([i](float v,int) { return controls::display(i,v); })
                     .withValueFromStringFunction([i](const juce::String& text) { return static_cast<float>(controls::parse(i,text)); });
@@ -78,7 +84,7 @@ public:
         for(int model:{0,1}) addLink(model);
         for(int model:{0,1}) addComparison(model);
         for(int model:{0,1}) addTrims(model);
-        for(int model=2;model<controls::modelCount;++model) { addBank(model); addLink(model); addComparison(model); addTrims(model); }
+        for(int model=2;model<controls::woodenChest;++model) { addBank(model); addLink(model); addComparison(model); addTrims(model); }
         p.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"reverbEnabled",1},"Reverb stage enabled",true));
         p.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"srsly3Enabled",1},"Srsly3 stage enabled",false));
         for(int i=0;i<6;++i) {
@@ -88,11 +94,13 @@ public:
             p.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{controls::widthId(i),1},
                 "Srsly3 "+juce::String(controls::widthNames[static_cast<size_t>(i)]),juce::NormalisableRange<float>(0,1),controls::widthDefaults[static_cast<size_t>(i)],attr));
         }
+        addBank(controls::woodenChest);addLink(controls::woodenChest);
+        addComparison(controls::woodenChest);addTrims(controls::woodenChest);
         return p;
     }
     int selectedModel() const { return juce::jlimit(0,controls::modelCount-1,juce::roundToInt(modelValue->load())); }
     void prepareToPlay(double rate,int maximumBlockSize) override {
-        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate); engine8.reset(rate); engine9.reset(rate); engine10.reset(rate); engine11.reset(rate); engine12.reset(rate); engine13.reset(rate); engine14.reset(rate); engine15.reset(rate);
+        sampleRate=rate; engine.reset(rate); engine1.reset(rate); engine2.reset(rate); engine3.reset(rate); engine4.reset(rate); engine5.reset(rate); engine6.reset(rate); engine7.reset(rate); engine8.reset(rate); engine9.reset(rate); engine10.reset(rate); engine11.reset(rate); engine12.reset(rate); engine13.reset(rate); engine14.reset(rate); engine15.reset(rate);woodenChest.reset(rate);
         reverbBlend.reset(rate,.01); widthBlend.reset(rate,.01);
         reverbBlend.setCurrentAndTargetValue(reverbEnabled->load()>.5f?1.:0.);
         widthBlend.setCurrentAndTargetValue(widthEnabled->load()>.5f?1.:0.);
@@ -109,7 +117,10 @@ public:
         blendSmooth.setCurrentAndTargetValue(original[static_cast<size_t>(activeModel)]->load()>.5f?0.:1.);
     }
     template<class Engine,class T> void render(Engine& e,juce::AudioBuffer<T>& b,int model) {
-        for(int i=0;i<controls::count(model);++i) e.setParameter(i,values[static_cast<size_t>(model)][static_cast<size_t>(i)]->load());
+        for(int i=0;i<controls::count(model);++i) {
+            const float value=values[static_cast<size_t>(model)][static_cast<size_t>(i)]->load();
+            e.setParameter(i,controls::isStepped(model,i)?value/controls::woodenChestModelMax:value);
+        }
         // Fixed stack storage preserves dry input without allocating on the audio thread.
         // Measure the original input and unmatched two-stage output, then apply a separate gain.
         std::array<T,256> dryL{},dryR{},stageL{},stageR{};
@@ -196,6 +207,7 @@ public:
             case 12: render(engine12,b,model); break;
             case 13: render(engine13,b,model); break;
             case 14: render(engine14,b,model); break;
+            case controls::woodenChest: render(woodenChest,b,model); break;
             default: break;
         }
         publishMeters(b);
@@ -322,6 +334,7 @@ private:
                 case 12: engine12.reset(sampleRate); break;
                 case 13: engine13.reset(sampleRate); break;
                 case 14: engine14.reset(sampleRate); break;
+                case controls::woodenChest: woodenChest.reset(sampleRate); break;
                 default: break;
             }
             setLatencySamples(controls::latency(model));
@@ -380,6 +393,7 @@ private:
     EchojamEngine engine13;
     ClearCoatEngine engine14;
     Srsly3Engine engine15;
+    WoodenChestEngine woodenChest;
     std::array<std::atomic<float>*,6> widthValues{};
     std::atomic<float>* reverbEnabled=nullptr;
     std::atomic<float>* widthEnabled=nullptr;
@@ -649,8 +663,10 @@ private:
             slider.setName(controls::name(model,i));
             slider.setTooltip(juce::String(controls::tip(model,i))+" Double-click to reset.");
             attachments[static_cast<size_t>(i)]=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state,controls::id(model,i),slider);
-            slider.textFromValueFunction=[i](double v) { return controls::display(i,v); };
-            slider.valueFromTextFunction=[i](const juce::String& text) { return controls::parse(i,text); };
+            if(!controls::isStepped(model,i)){
+                slider.textFromValueFunction=[i](double v) { return controls::display(i,v); };
+                slider.valueFromTextFunction=[i](const juce::String& text) { return controls::parse(i,text); };
+            }
             slider.setDoubleClickReturnValue(true,controls::defaultValue(model,i)); slider.updateText();
         }
         gainLinkAttachment=std::make_unique<GainLinkAttachment>(

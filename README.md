@@ -2,13 +2,13 @@
 
 A studio interface for **Airwindows kRockstar2 (default), kRockstar, kCyberCity,
 VerbThic, kWoodRoom, MV2, VerbSevens, kStation, kGuitarHall2, kCathedral5,
-kBeyond, kPlate140, kPlate240, Echojam and ClearCoat**, following
+kBeyond, kPlate140, kPlate240, Echojam, ClearCoat and WoodenChest**, following
 [AirEq](https://github.com/johandoornenbal/AirEq) and
 [AirComp](https://github.com/johandoornenbal/AirComp): cream, charcoal and brass,
 analogue output meters, linked trims and learned LUFS compensation.
 
 Native **VST3 for Apple Silicon Macs, M2 and later**, macOS 11+. Original DSP by
-Chris Johnson / Airwindows. All sixteen native algorithms retain their audio calculations,
+Chris Johnson / Airwindows. All seventeen native algorithms retain their audio calculations,
 including the reverb feedback, room tone, downsampling, distance and dry/wet mixing.
 
 ![kRockstar2 editor](docs/ui-krockstar2.png)
@@ -40,7 +40,10 @@ including the reverb feedback, room tone, downsampling, distance and dry/wet mix
 | kPlate240 | Input, Regen, DeRez, Pre-delay, Wetness | 100%, 50%, 100%, 0%, 25% |
 | Echojam | Select, Regen, Speed, Dry/Wet | All 50% |
 | ClearCoat | Select, Dry/Wet | 50%, 100% |
+| WoodenChest | Model, Resonance, Depth | 0, 50%, 50% |
 | Srsly3 | Center, Space, Level, Q, Nonlin, Dry/Wet | 50%, 50%, 100%, 50%, 50%, 100% |
+
+WoodenChest Model has 17 discrete steps numbered 0–16. LUFS matching and Original A/B work with WoodenChest, including when Srsly3 is enabled.
 
 Echojam and ClearCoat retain the original continuous Select mapping to 17
 patterns (0–16), displayed on the normalized percentage scale. Echojam Speed is
@@ -135,7 +138,7 @@ when exporting offline. Delay-buffer history is not serialized in sessions.
 All 128 parameter IDs and indices from the thirteen-model release are unchanged.
 Two-, three-, eight- and thirteen-model sessions retain their controls and learned matches;
 missing banks start at native defaults with no learned match. The model selector
-now has fifteen choices, so automation of
+now has sixteen choices, so automation of
 that selector may need updating for the expanded range.
 
 ## One-command Mac build and install
@@ -187,9 +190,9 @@ configure with `-DJUCE_PATH=/workspace/deps/JUCE`. `scripts/setup-cloud.sh` sets
 the rootless Debian tools and development dependencies if needed. Linux builds
 are for development; release support targets Apple Silicon Macs.
 
-The sixteen native reference suites compare float/double output exactly against the
+The seventeen native reference suites compare float/double output exactly against the
 untouched upstream VST2 sources with matched seeds: 96 scenarios per existing algorithm
-and 160 each for Echojam/ClearCoat (including all 17 selector patterns),
+and 160 each for Echojam, ClearCoat and WoodenChest (including all 17 selector patterns),
 44.1–192 kHz, silence, parameter extremes and automation, variable blocks,
 reverb tails and reset. Loudness tests compare with independent libebur128.
 Plugin checks cover exact routing, defaults, trims/link gestures, bypass, metering,
@@ -197,12 +200,12 @@ all three editor sizes, typed/reset controls and session recall. LUFS integratio
 checks cover learning, fixed compensation placement, relearning, per-model isolation,
 Original A/B, reset, cancellation, silent input and automatic completion.
 
-Linux Release VST3 compilation and all nineteen test suites passed, including
-1,664 exact upstream comparisons (maximum absolute error 0). Two-stage checks
+Linux Release VST3 compilation and all twenty test suites passed, including
+1,824 exact upstream comparisons (maximum absolute error 0). Two-stage checks
 cover both precisions, every reverb followed by Srsly3, independent stage switches,
 legacy state defaults and LUFS measurement/compensation after the complete chain.
 Native macOS signing and DAW playback were not run in this Linux workspace.
-All fifteen reverb editors with the separate Srsly3 panel rendered at all three sizes. The installer passed shell syntax and
+All sixteen reverb editors with the separate Srsly3 panel rendered at all three sizes. The installer passed shell syntax and
 simulated success, signing failure and replacement-failure rollback checks.
 
 ## Licensing

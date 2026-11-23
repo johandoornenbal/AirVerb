@@ -1,0 +1,3 @@
+# Preserve upstream Airwindows source and the adapter's processing formatting.
+third_party/airwindows/WoodenChest/** -text -whitespace
+Source/WoodenChestEngine.* -whitespace

@@ -85,3 +85,11 @@ Srsly3 is from the same `143a86df3642881e0be4bf827815050721063b41` pin,
 under `plugins/WinVST/Srsly3`, with the same Chris Johnson / Airwindows MIT license.
 Its three original files are retained verbatim; `scripts/port-srsly3.py` reproduces
 the adapter, preserving all six native controls and processing expressions.
+
+## Airwindows WoodenChest
+
+Chris Johnson / Airwindows, MIT. Original files from commit
+`9ee15bc3f2d6461bdf2d7830c4544c71f300c341` are retained verbatim in
+`third_party/airwindows/WoodenChest`. The SDK-free adapter preserves the original
+processing bodies and defaults. AirVerb exposes the 17 upstream model indices as
+integer steps. [Pinned upstream source](https://github.com/airwindows/airwindows/tree/9ee15bc3f2d6461bdf2d7830c4544c71f300c341/plugins/WinVST/WoodenChest)
